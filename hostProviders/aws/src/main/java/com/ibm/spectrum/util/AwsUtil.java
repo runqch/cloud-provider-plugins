@@ -1208,7 +1208,26 @@ public class AwsUtil {
 
 
 
-
+    
+public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
+	if (StringUtils.isNullOrEmpty(t.getVmType()) ||
+			CollectionUtils.isNullOrEmpty(t.getWeightedCapacity())) {
+		return null;
+	}
+	Map<String, Double> weightMap = new HashMap<String, Double>();
+	String[] instanceTypesArray = t.getVmType().split(",");
+	List<Double> weightedCapacity = t.getWeightedCapacity();
+	int i = 0;
+	for (String instanceType : instanceTypesArray) {
+		if (StringUtils.isNullOrEmpty(instanceType.trim())) {
+			i ++;
+			continue;
+		}
+		weightMap.put(instanceType.toLowerCase(), weightedCapacity.get(i));		
+	}
+	return weightMap;
+	
+}
 
     /**
      * Maps an Instance retrieved from the AWS API to an AwsMachine
@@ -1278,6 +1297,20 @@ public class AwsUtil {
         else
             mlaunchtime = 0L;
         awsMachine.setLaunchtime(mlaunchtime);
+        
+        // Set weighted capacity of this machine
+        AwsTemplate usedTemplate = getTemplateFromFile(templateId);
+        Map<String, Double> weightedCapacityMap = getWeightedCapacityMap(usedTemplate);
+        Double weight = 0.0;
+        if (weightedCapacityMap == null 
+        		|| weightedCapacityMap.size() == 0
+        		|| weightedCapacityMap.get(instance.getInstanceType().toLowerCase()) == null) {
+        	weight = 1.0;
+        } else {
+        	weight = weightedCapacityMap.get(instance.getInstanceType().toLowerCase());
+        }
+        awsMachine.setWeightedCapacity(weight);
+        log.debug("The weighted capacity of instance type: " + instance.getInstanceType() + " weight: " + weight + "templateId: " + templateId);
 
         if (log.isTraceEnabled()) {
             log.trace("End in class AwsUtil in method mapAwsInstanceToAwsMachine with return awsMachine:" + awsMachine);

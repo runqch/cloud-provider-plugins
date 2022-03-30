@@ -90,8 +90,13 @@ public class AwsMachine {
      */
     @JsonInclude(Include.NON_NULL)
     private String publicDnsName;
+    
+    
+    @JsonInclude(Include.NON_NULL)
+    private Double weightedCapacity; 
 
-    public void hide() {
+
+	public void hide() {
         this.reqId = null;
         this.retId = null;
         this.template = null;
@@ -116,6 +121,7 @@ public class AwsMachine {
         this.rcAccount = m.getRcAccount();
         this.launchtime = m.getLaunchtime();
         this.publicDnsName = m.getPublicDnsName();
+        this.weightedCapacity = m.getWeightedCapacity();
     }
 
     /**
@@ -299,6 +305,20 @@ public class AwsMachine {
     public void setPublicDnsName(String name) {
         this.publicDnsName = name;
     }
+    
+    /**
+     * @return Weighted capacity
+     */
+    public Double getWeightedCapacity() {
+		return weightedCapacity;
+	}
+
+    /**
+     * @param Machine weighted capacity
+    */
+	public void setWeightedCapacity(Double weightedCapacity) {
+		this.weightedCapacity = weightedCapacity;
+	}
 
 
     /** (Non Javadoc)
@@ -336,6 +356,8 @@ public class AwsMachine {
         builder.append(msg);
         builder.append(", status=");
         builder.append(status);
+        builder.append(", weightedCapacity=");
+        builder.append(weightedCapacity);
         builder.append("]");
         return builder.toString();
     }
@@ -357,6 +379,7 @@ public class AwsMachine {
         this.setResult(machineWithNewValues.getResult());
         this.setMsg(machineWithNewValues.getMsg());
         this.setStatus(machineWithNewValues.getStatus());
+        this.setWeightedCapacity(machineWithNewValues.getWeightedCapacity());
 
 
     }
