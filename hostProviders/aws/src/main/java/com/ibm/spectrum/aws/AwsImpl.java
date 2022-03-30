@@ -31,6 +31,9 @@ import java.util.Iterator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.amazonaws.services.ec2.model.CreateFleetInstance;
+import com.amazonaws.services.ec2.model.CreateFleetResult;
+import com.amazonaws.services.ec2.model.FleetType;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceStateChange;
 import com.amazonaws.services.ec2.model.InstanceStatus;
@@ -289,21 +292,39 @@ public class AwsImpl implements IAws {
 
                 // remove empty instance on-demand request
                 if (CollectionUtils.isNullOrEmpty(mList)) {
-                    if (HostAllocationType.Spot.toString().equals(requestInDB.getHostAllocationType())) {
-                        List<AwsMachine> newlyCreatedMachines = AWSClient.updateSpotFleetStatus(requestInDB);
-                        if ((requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE)
-                                || requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR))
-                                && CollectionUtils.isNullOrEmpty(newlyCreatedMachines)) {
-                            log.debug("Spot request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
-                            AWSClient.deleteFleetTemplateForAwsRequest(requestInDB);
-                            iterReq.remove();
-                            requestsToBeChecked.remove(requestInDB);
-                        }
-                    } else {
-                        log.debug(
-                            "On-demand request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
-                        iterReq.remove();
-                    }
+                	if(requestInDB.getFleetType() != null) {
+                		if (FleetType.Request.equals(requestInDB.getFleetType())) {
+                			List<AwsMachine> newlyCreatedMachines = AWSClient.updateEC2FleetStatus(requestInDB);
+                			if ((requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE)
+                					|| requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR))
+                					&& CollectionUtils.isNullOrEmpty(newlyCreatedMachines)) {
+                				log.debug("EC2 Fleet Request type request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
+                				AWSClient.deleteEC2FleetTemplateForAwsRequest(requestInDB);
+                				iterReq.remove();
+                				requestsToBeChecked.remove(requestInDB);
+                			}
+                		} else if (FleetType.Instant.equals(requestInDB.getFleetType())) {
+                			log.debug("EC2 Fleet Instant type request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
+                			AWSClient.deleteEC2FleetTemplateForAwsRequest(requestInDB);
+                			iterReq.remove();
+                		}
+                	} else {
+                		if (HostAllocationType.Spot.toString().equals(requestInDB.getHostAllocationType())) {
+                			List<AwsMachine> newlyCreatedMachines = AWSClient.updateSpotFleetStatus(requestInDB);
+                			if ((requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE)
+                					|| requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR))
+                					&& CollectionUtils.isNullOrEmpty(newlyCreatedMachines)) {
+                				log.debug("Spot request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
+                				AWSClient.deleteSpotFleetTemplateForAwsRequest(requestInDB);
+                				iterReq.remove();
+                				requestsToBeChecked.remove(requestInDB);
+                			}
+                		} else {
+                			log.debug(
+                					"On-demand request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
+                			iterReq.remove();
+                		}
+                	}
                 }
             }
 
@@ -378,6 +399,7 @@ public class AwsImpl implements IAws {
         boolean onDemandRequest = true;
         AwsEntity rsp = new AwsEntity();
         String instanceTagVal = "";
+        boolean fleetRequest = false;
 
         List<AwsMachine> machines = req.getMachines();
         if (!CollectionUtils.isNullOrEmpty(machines)) {
@@ -412,44 +434,80 @@ public class AwsImpl implements IAws {
         instanceTagVal = req.getTagValue();
         rq.setTagValue(instanceTagVal);
         String hostAllocationType = HostAllocationType.OnDemand.toString();
-
+        FleetType fleetType = null;
+        
+        //If fleetType is defined, then go to EC2 fleet API
+        if (!StringUtils.isNullOrEmpty(at.getFleetType())) {
+        	boolean validRequest = AwsUtil.validateEC2FleetRequest(at);
+        	if (!validRequest) {
+        		rsp.setStatus(AwsConst.EBROKERD_STATE_WARNING);
+        		rsp.setRsp(1, "EC2 Fleet configuration error");
+        		return rsp;
+        	}
+        	fleetRequest = true;
+        }
+        
         //If the spotPrice is defined then this is Spot Pricing request
         if (at.getSpotPrice() != null && at.getSpotPrice() > 0f) {
             onDemandRequest = false;
             hostAllocationType = HostAllocationType.Spot.toString();
         }
+        
+        log.debug("info: " + at.getAttributes().get("ncpus").toString());
+        
+        Integer ncpus = Integer.parseInt(at.getAttributes().get("ncpus").get(1));
+        Integer targetCapacity = vmNum * ncpus * 2;
+        log.debug("ncpus = " + ncpus + ", targetCapacity = " + targetCapacity);
+        		
 
         String reqId = null;
         List<AwsMachine> mLst = new ArrayList<AwsMachine>();
 
-        // If the host allocation is onDemand
-        if (onDemandRequest) {
-            Reservation rsv = null;
+        // Request type is EC2 fleet
+        if (fleetRequest) {
+        	fleetType = FleetType.fromValue(at.getFleetType().toLowerCase());
+        	CreateFleetResult fleetResult = AWSClient.createVMByEC2Fleet(at, instanceTagVal, onDemandRequest, fleetType, rsp); 
+        	if (fleetType.equals(FleetType.Instant)) {
+        		List <CreateFleetInstance> fleetInstancesList = fleetResult.getInstances();
+        		for (CreateFleetInstance fleetInstance: fleetInstancesList) {
+        			for (String id: fleetInstance.getInstanceIds()) {
+        				AwsMachine m = new AwsMachine();
+        				m.setMachineId(id);
+        				m.setReqId(fleetResult.getFleetId());
+        				mLst.add(m);
+        			}
+        		}
+        	}
+        	reqId = fleetResult.getFleetId();
+        } else { // Not EC2 fleet request, keep old behavior
+        	if (onDemandRequest) {
+        		Reservation rsv = null;
 
-            rsv = AWSClient.createVM(at, instanceTagVal, rsp);
+        		rsv = AWSClient.createVM(at, instanceTagVal, rsp);
 
-            if (null == rsv || CollectionUtils.isNullOrEmpty(rsv.getInstances())) {
-                return rsp;
-            }
+        		if (null == rsv || CollectionUtils.isNullOrEmpty(rsv.getInstances())) {
+        			return rsp;
+        		}
 
-            reqId = rsv.getReservationId();
-            for (Instance vm : rsv.getInstances()) {
-                AwsMachine m = AwsUtil.mapAwsInstanceToAwsMachine(
-                                   at.getTemplateId(), reqId, vm, instanceTagVal);
-                mLst.add(m);
-            }
+        		reqId = rsv.getReservationId();
+        		for (Instance vm : rsv.getInstances()) {
+        			AwsMachine m = AwsUtil.mapAwsInstanceToAwsMachine(
+        					at.getTemplateId(), reqId, vm, instanceTagVal);
+        			mLst.add(m);
+        		}
 
-        } else {// If Host allocation is spot
+        	} else {// If Host allocation is spot
 
-            RequestSpotFleetResult requestSpotFleetResult = AWSClient
-                    .requestSpotInstance(at, instanceTagVal, rsp);
-            if (null == requestSpotFleetResult) {
-                rsp.setRsp(1,
-                           "Request Spot Instance on " + AwsUtil.getProviderName()
-                           + " EC2 failed.");
-                return rsp;
-            }
-            reqId = requestSpotFleetResult.getSpotFleetRequestId();
+        		RequestSpotFleetResult requestSpotFleetResult = AWSClient
+        				.requestSpotInstance(at, instanceTagVal, rsp);
+        		if (null == requestSpotFleetResult) {
+        			rsp.setRsp(1,
+        					"Request Spot Instance on " + AwsUtil.getProviderName()
+        					+ " EC2 failed.");
+        			return rsp;
+        		}
+        		reqId = requestSpotFleetResult.getSpotFleetRequestId();
+        	}
         }
 
         rq.setMachines(mLst);
@@ -458,6 +516,7 @@ public class AwsImpl implements IAws {
         rq.setTtl(at.getTtl());
         rq.setTagValue(instanceTagVal);
         rq.setHostAllocationType(hostAllocationType);
+        rq.setFleetType(fleetType);
         rq.setTemplateId(t.getTemplateId());
 
         AwsUtil.saveToFile(rq);
@@ -729,13 +788,21 @@ public class AwsImpl implements IAws {
         String latestRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
         // If this is a Spot Fleet Request and the request update is for a create request, call the Spot Fleet APIs to update the status
         //Request updates for machine termination does not need a spot fleet status update.
-        if (HostAllocationType.Spot.toString().equals(fReq.getHostAllocationType()) && statusUpdateForCreateMachine) {
-            // Check the Spot Fleet Request Status
-            newlyCreatedMachines = AWSClient.updateSpotFleetStatus(fReq);
-            latestRequestStatus = fReq.getStatus();
-            log.debug("Setting the request status: " + latestRequestStatus);
-            log.debug("newlyCreatedMachines: " + newlyCreatedMachines);
-
+        if (statusUpdateForCreateMachine) {
+        	if (fReq.getFleetType() != null) {
+        		if (fReq.getFleetType().equals(FleetType.Request)) {
+            		newlyCreatedMachines = AWSClient.updateEC2FleetStatus(fReq);
+            		latestRequestStatus = fReq.getStatus();
+            		log.debug("Setting the EC2 Fleet request status: " + latestRequestStatus);
+            		log.debug("newlyCreatedMachines: " + newlyCreatedMachines);
+        		}
+        	} else if (HostAllocationType.Spot.toString().equals(fReq.getHostAllocationType())) {
+        		// Check the Spot Fleet Request Status
+        		newlyCreatedMachines = AWSClient.updateSpotFleetStatus(fReq);
+        		latestRequestStatus = fReq.getStatus();
+        		log.debug("Setting the Spot Fleet request status: " + latestRequestStatus);
+        		log.debug("newlyCreatedMachines: " + newlyCreatedMachines);
+        	}
         }
         List<AwsMachine> machinesListInDB = fReq.getMachines();
         for (AwsMachine tempMachineInDB : machinesListInDB) {
@@ -798,7 +865,8 @@ public class AwsImpl implements IAws {
             // parameters retrieved from AWS
             if(newlyCreatedMachines.contains(tempMachineInDB)
                     // Defect#197080, host name and priviate ip may be null when first get the instance.
-                    || ( (HostAllocationType.Spot.toString().equals(fReq.getHostAllocationType()) && statusUpdateForCreateMachine)
+                    || ( ((fReq.getFleetType() != null ||
+                    		HostAllocationType.Spot.toString().equals(fReq.getHostAllocationType())) && statusUpdateForCreateMachine)
                          && (StringUtils.isNullOrEmpty(tempMachineInDB.getName()) || StringUtils.isNullOrEmpty(tempMachineInDB.getPrivateIpAddress())) )
               ) {
                 tempMachineInDB = AwsUtil.mapAwsInstanceToAwsMachine(usedTemplate.getTemplateId(), fReq.getReqId(),correspondingInstanceForTempMachineInDB, usedTemplate.getInstanceTags(), tempMachineInDB);

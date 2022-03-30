@@ -41,6 +41,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.amazonaws.services.ec2.model.AllocationStrategy;
+import com.amazonaws.services.ec2.model.FleetType;
 import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.IamInstanceProfileSpecification;
 import com.amazonaws.services.ec2.model.Instance;
@@ -838,16 +839,20 @@ public class AwsUtil {
     /**
      * @param awsTemplate
      */
-    public static void applyDefaultValuesForSpotInstanceTemplate(AwsTemplate awsTemplate) {
+    public static void applyDefaultValuesForInstanceTemplate(AwsTemplate awsTemplate, boolean onDemandRequest) {
         if (log.isTraceEnabled()) {
-            log.trace("Start in class AwsUtil in method applyDefaultValuesForSpotInstanceTemplate with parameters: awsTemplate: " + awsTemplate);
+            log.trace("Start in class AwsUtil in method applyDefaultValuesForInstanceTemplate with parameters: awsTemplate: " + awsTemplate + ", onDemandRequest: " + onDemandRequest);
         }
 
         // Mapping the allocation strategy
         // SUP_BY_LSF issue#259 support CapacityOptimized
         // and change the default allocation strategy to CapacityOptimized if empty or invalid
         if (StringUtils.isNullOrEmpty(awsTemplate.getAllocationStrategy())) {
-            awsTemplate.setAllocationStrategy(AllocationStrategy.CapacityOptimized.toString());
+        	if (onDemandRequest) {
+        		awsTemplate.setAllocationStrategy(AllocationStrategy.LowestPrice.toString());
+        	} else {
+        		awsTemplate.setAllocationStrategy(AllocationStrategy.CapacityOptimized.toString());
+        	}
         } else if (awsTemplate.getAllocationStrategy().equalsIgnoreCase(
                        AllocationStrategy.CapacityOptimized.toString())) {
             awsTemplate.setAllocationStrategy(AllocationStrategy.CapacityOptimized.toString());
@@ -945,6 +950,49 @@ public class AwsUtil {
 
         return true;
     }
+    
+    
+    /**
+     * Validate all required parameters are provided
+     *
+     * @param awsTemplate
+     * @return
+     */
+    public static boolean validateEC2FleetRequest(AwsTemplate awsTemplate) {
+    	
+    	FleetType fleetType = FleetType.fromValue(awsTemplate.getFleetType().toLowerCase());
+    	
+    	if (FleetType.Maintain.equals(fleetType)) {
+        	log.error("EC2_CONFIG_ERROR: Unsupported Fleet Type 'Maintain'");
+        	return false;
+    	}
+    	
+        if (StringUtils.isNullOrEmpty(awsTemplate.getLaunchTemplateId())) {
+        	log.error("EC2_CONFIG_ERROR: Missing required parameter launchTemplateId");
+        	return false;
+        }
+        
+        if (!StringUtils.isNullOrEmpty(awsTemplate.getVmType())) {
+        	if (!CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
+        		int numOfvmType = awsTemplate.getVmType().split(",").length;
+        		int numOfWeightedCapacity = awsTemplate.getWeightedCapacity().size();
+        		if (numOfvmType != numOfWeightedCapacity) {
+        			log.error("EC2_CONFIG_ERROR: vmType and weightCapacity must have one-to-one correspondence");
+        			return false;
+        		}
+        	} else {
+        		log.warn("EC2_CONFIG_WARN: no weightCapacity defined, set default to 1");
+        	}
+        } else {
+        	if (CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
+        		log.warn("EC2_CONFIG_WARN: weightCapacity ignored due to no vmType defined");
+        	}
+        }
+
+        return true;
+    }
+    
+    
 
 
     /**
@@ -1012,7 +1060,6 @@ public class AwsUtil {
                     spotFleetLaunchSpecification.setTagSpecifications(tagSpecifications);
                 }
             }
-
 
             spotFleetLaunchSpecificationList.add(spotFleetLaunchSpecification);
 

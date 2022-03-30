@@ -81,7 +81,7 @@ public class AwsTemplate {
      * when requesting instances
      */
     @JsonInclude(Include.NON_NULL)
-    private String fleetRole;
+    private String fleetRole; 
 
 
 
@@ -195,8 +195,20 @@ public class AwsTemplate {
 
     @JsonInclude(Include.NON_NULL)
     private Double marketSpotPrice;
-
+    
     /**
+     * Optional. Used when user want to call EC2 fleet API.
+     */
+    @JsonProperty("fleetType")
+    @JsonInclude(Include.NON_NULL)
+    private String fleetType;
+    
+    
+    @JsonProperty("weightedCapacity")
+    @JsonInclude(Include.NON_NULL)
+    private List<Double> weightedCapacity;
+
+	/**
      * <p>Title: </p>
      * <p>Description: </p>
      */
@@ -229,6 +241,8 @@ public class AwsTemplate {
         this.launchTemplateId = t.getLaunchTemplateId();
         this.launchTemplateVersion = t.getLaunchTemplateVersion();
         this.marketSpotPrice = t.getMarketSpotPrice();
+        this.fleetType = t.getFleetType();
+        this.weightedCapacity = t.getWeightedCapacity();
     }
 
     public void hide() {
@@ -592,6 +606,10 @@ public class AwsTemplate {
         builder.append(this.launchTemplateVersion);
         builder.append(", marketSpotPrice=");
         builder.append(this.marketSpotPrice);
+        builder.append(", fleetType=");
+        builder.append(this.fleetType);
+        builder.append(", weightedCapacity=");
+        builder.append(this.weightedCapacity);
         builder.append("]");
         return builder.toString();
     }
@@ -659,5 +677,21 @@ public class AwsTemplate {
     public void setMarketSpotPrice(Double marketSpotPrice) {
         this.marketSpotPrice = marketSpotPrice;
     }
+    
+    
+    public String getFleetType() {
+        return fleetType;
+    }
 
+    public void setFleetType(String fleetType) {
+        this.fleetType = fleetType;
+    }
+
+	public List<Double> getWeightedCapacity() {
+		return weightedCapacity;
+	}
+
+	public void setWeightedCapacity(List<Double> weightedCapacity) {
+		this.weightedCapacity = weightedCapacity;
+	}
 }

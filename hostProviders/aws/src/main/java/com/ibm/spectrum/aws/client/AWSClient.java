@@ -46,10 +46,13 @@ import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.ActiveInstance;
 import com.amazonaws.services.ec2.model.ActivityStatus;
 import com.amazonaws.services.ec2.model.BatchState;
+import com.amazonaws.services.ec2.model.CreateFleetRequest;
+import com.amazonaws.services.ec2.model.CreateFleetResult;
 import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
 import com.amazonaws.services.ec2.model.CreateKeyPairResult;
 import com.amazonaws.services.ec2.model.CreateTagsRequest;
 import com.amazonaws.services.ec2.model.CreateTagsResult;
+import com.amazonaws.services.ec2.model.DefaultTargetCapacityType;
 import com.amazonaws.services.ec2.model.DescribeInstanceStatusRequest;
 import com.amazonaws.services.ec2.model.DescribeInstanceStatusResult;
 import com.amazonaws.services.ec2.model.DescribeInstancesRequest;
@@ -64,6 +67,10 @@ import com.amazonaws.services.ec2.model.DescribeSpotInstanceRequestsRequest;
 import com.amazonaws.services.ec2.model.DescribeSpotInstanceRequestsResult;
 import com.amazonaws.services.ec2.model.EbsInstanceBlockDevice;
 import com.amazonaws.services.ec2.model.Filter;
+import com.amazonaws.services.ec2.model.FleetData;
+import com.amazonaws.services.ec2.model.FleetLaunchTemplateConfig;
+import com.amazonaws.services.ec2.model.FleetLaunchTemplateConfigRequest;
+import com.amazonaws.services.ec2.model.FleetLaunchTemplateOverridesRequest;
 import com.amazonaws.services.ec2.model.FleetType;
 import com.amazonaws.services.ec2.model.Instance;
 import com.amazonaws.services.ec2.model.InstanceBlockDeviceMapping;
@@ -85,7 +92,9 @@ import com.amazonaws.services.ec2.model.SpotFleetRequestConfigData;
 import com.amazonaws.services.ec2.model.SpotInstanceRequest;
 import com.amazonaws.services.ec2.model.SpotInstanceState;
 import com.amazonaws.services.ec2.model.SpotInstanceStatus;
+import com.amazonaws.services.ec2.model.SpotOptionsRequest;
 import com.amazonaws.services.ec2.model.TagSpecification;
+import com.amazonaws.services.ec2.model.TargetCapacitySpecificationRequest;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -99,17 +108,24 @@ import com.amazonaws.services.ec2.model.CreateLaunchTemplateRequest;
 import com.amazonaws.services.ec2.model.RequestLaunchTemplateData;
 import com.amazonaws.services.ec2.model.CreateLaunchTemplateResult;
 import com.amazonaws.services.ec2.model.FleetLaunchTemplateSpecification;
+import com.amazonaws.services.ec2.model.FleetLaunchTemplateSpecificationRequest;
 import com.amazonaws.services.ec2.model.LaunchTemplateConfig;
 import com.amazonaws.services.ec2.model.LaunchTemplateInstanceNetworkInterfaceSpecificationRequest;
 import com.amazonaws.services.ec2.model.LaunchTemplatePlacementRequest;
 import com.amazonaws.services.ec2.model.LaunchTemplateIamInstanceProfileSpecificationRequest;
 import com.amazonaws.services.ec2.model.LaunchTemplateTagSpecificationRequest;
+import com.amazonaws.services.ec2.model.OnDemandOptionsRequest;
 import com.amazonaws.services.ec2.model.LaunchTemplateSpecification;
 import com.amazonaws.services.ec2.model.LaunchTemplateOverrides;
 import com.amazonaws.services.ec2.model.CreateLaunchTemplateVersionResult;
 import com.amazonaws.services.ec2.model.CreateLaunchTemplateVersionRequest;
 import com.amazonaws.services.ec2.model.DeleteLaunchTemplateVersionsRequest;
 import com.amazonaws.services.ec2.model.DeleteLaunchTemplateVersionsResult;
+import com.amazonaws.services.ec2.model.DescribeFleetInstancesRequest;
+import com.amazonaws.services.ec2.model.DescribeFleetInstancesResult;
+import com.amazonaws.services.ec2.model.DescribeFleetsInstances;
+import com.amazonaws.services.ec2.model.DescribeFleetsRequest;
+import com.amazonaws.services.ec2.model.DescribeFleetsResult;
 import com.amazonaws.util.CollectionUtils;
 import com.amazonaws.util.StringUtils;
 import com.ibm.spectrum.constant.AwsConst;
@@ -313,6 +329,231 @@ public class AWSClient {
         }
         return ec2;
     }
+    
+    public static List<FleetLaunchTemplateOverridesRequest> getFleetLaunchTemplateOverrideList (AwsTemplate t, boolean onDeamndRequest, FleetType fleetType)
+    {
+    	List<FleetLaunchTemplateOverridesRequest> lauchTemplateOverrideRequestList = new ArrayList<FleetLaunchTemplateOverridesRequest> ();
+		
+    	//Only need to set maxPrice for spot instance
+    	String maxPrice = onDeamndRequest ? null : t.getSpotPrice().toString();
+    	
+    	if (!StringUtils.isNullOrEmpty(t.getVmType())) {
+    		String instanceTypes = t.getVmType();
+    		String[] instanceTypesArray = instanceTypes.split(",");
+    		boolean weightDefined = false;
+    		List <Double> weightedCapacity = t.getWeightedCapacity();
+    		if (!CollectionUtils.isNullOrEmpty(weightedCapacity)) {
+    			if (instanceTypesArray.length != weightedCapacity.size()) {
+    				log.error("EC2_CONFIG_ERROR: vmType and weightCapacity must have one-to-one correspondence");
+    				return lauchTemplateOverrideRequestList;
+    			}
+    			weightDefined = true;
+    		}
+
+    		int i = 0;
+    		for (String instanceType : instanceTypesArray) {
+    			if (StringUtils.isNullOrEmpty(instanceType.trim())) {
+    				i ++;
+    				continue;
+    			}
+    			Double weight = weightDefined ? weightedCapacity.get(i) : 1.0;
+    			//NOTICE: There are some differences for launchTemplateOverride configuration with different FleetType
+    			//[Instant] - one vmType, one subnetId in each launchTemplateOverride
+    			//[Request] - one vmType, multiple subnetId in each launchTemplateOverride
+    			if (FleetType.Instant.equals(fleetType) && !StringUtils.isNullOrEmpty(t.getSubnetId())) {
+    				String[] subnetIds = t.getSubnetId().split(",");
+    				for (String subnetId: subnetIds) {
+    					if (StringUtils.isNullOrEmpty(subnetId.trim())) {
+    						continue;
+    					}
+    					log.debug("Creating a launch template override for 'Instant' EC2 Fleet Type with instance type: " + instanceType.trim() + ", subnetId: " + subnetId);
+    					FleetLaunchTemplateOverridesRequest launchTemplateOverride = new FleetLaunchTemplateOverridesRequest();
+    					launchTemplateOverride.withInstanceType(instanceType.trim());
+    					launchTemplateOverride.withSubnetId(subnetId.trim());
+    					launchTemplateOverride.withWeightedCapacity(weight);
+    					launchTemplateOverride.withMaxPrice(maxPrice);
+    					lauchTemplateOverrideRequestList.add(launchTemplateOverride);
+    				}
+    			} else {
+    				log.debug("Creating a launch template override for EC2 Fleet Type with instance type: " + instanceType.trim() + ", subnetId: " + t.getSubnetId());
+    				FleetLaunchTemplateOverridesRequest launchTemplateOverride = new FleetLaunchTemplateOverridesRequest();
+    				launchTemplateOverride.withInstanceType(instanceType.trim());
+    				launchTemplateOverride.withSubnetId(t.getSubnetId());
+    				launchTemplateOverride.withWeightedCapacity(weight);
+    				launchTemplateOverride.withMaxPrice(maxPrice);
+    				lauchTemplateOverrideRequestList.add(launchTemplateOverride);	
+    			}	
+        		i ++;
+    		}
+    	} else if (!StringUtils.isNullOrEmpty(t.getSubnetId())) {
+    		String[] subnetIds = t.getSubnetId().split(",");
+    		if (FleetType.Instant.equals(fleetType)) {
+    			for (String subnetId: subnetIds) {
+    				if (StringUtils.isNullOrEmpty(subnetId.trim())) {
+    					continue;
+    				}
+    				log.debug("Creating a launch template override for 'Instant' EC2 Fleet Type with subnetId: " + subnetId);
+    				FleetLaunchTemplateOverridesRequest launchTemplateOverride = new FleetLaunchTemplateOverridesRequest();
+    				launchTemplateOverride.withSubnetId(subnetId.trim());
+    				launchTemplateOverride.withMaxPrice(maxPrice);
+    				lauchTemplateOverrideRequestList.add(launchTemplateOverride);
+    			}
+    		} else {
+    			log.debug("Creating a launch template override for 'Request' EC2 Fleet Type with subnetId: " + t.getSubnetId());
+    			FleetLaunchTemplateOverridesRequest launchTemplateOverride = new FleetLaunchTemplateOverridesRequest();
+    			launchTemplateOverride.withSubnetId(t.getSubnetId());
+				launchTemplateOverride.withMaxPrice(maxPrice);
+    			lauchTemplateOverrideRequestList.add(launchTemplateOverride);
+    		}
+    	}
+
+    	return lauchTemplateOverrideRequestList;	
+
+    }
+    
+	public static List<FleetLaunchTemplateConfigRequest> getFleetLaunchTemplateConfig(AwsTemplate t, String tagValue, boolean onDeamndRequest, FleetType fleetType)
+    {
+		if (log.isTraceEnabled()) {
+			log.trace("Start in class AWSClient in method getFleetLaunchTemplateConfig with parameters: t: " + t + ", tagValue: "
+					+ tagValue + ", onDeamndRequest: " + onDeamndRequest + ", fleetType: " + fleetType);
+		}
+        
+    	List<FleetLaunchTemplateConfigRequest> templateConfigRequestList = new ArrayList<FleetLaunchTemplateConfigRequest>();
+    	FleetLaunchTemplateConfigRequest configRequest = new FleetLaunchTemplateConfigRequest();
+    	FleetLaunchTemplateSpecificationRequest launchTemplateSpecification = new FleetLaunchTemplateSpecificationRequest();
+    	launchTemplateSpecification.withLaunchTemplateId(t.getLaunchTemplateId());
+
+        CreateLaunchTemplateVersionRequest createLaunchTemplateVersionRequest = new CreateLaunchTemplateVersionRequest();
+        createLaunchTemplateVersionRequest.withLaunchTemplateId(t.getLaunchTemplateId());
+        createLaunchTemplateVersionRequest.withVersionDescription("lsf-auto-created-version");
+        if (!StringUtils.isNullOrEmpty(t.getLaunchTemplateVersion())) {
+            createLaunchTemplateVersionRequest.withSourceVersion(t.getLaunchTemplateVersion());
+        } else {
+            createLaunchTemplateVersionRequest.withSourceVersion("$Default");
+        }
+        
+        // lsf-L3-tracker/issues/378 - If no LSF user_data, should not override user_data in launch template
+        String userData = AwsUtil.getEncodedUserData(t, tagValue);
+        if (!StringUtils.isNullOrEmpty(userData)) {
+        	RequestLaunchTemplateData requestLaunchTemplateData = new RequestLaunchTemplateData();
+        	requestLaunchTemplateData.withUserData(userData);
+        	createLaunchTemplateVersionRequest.withLaunchTemplateData(requestLaunchTemplateData);
+        }
+        try {
+            CreateLaunchTemplateVersionResult createLaunchTemplateVersionResult = ec2.createLaunchTemplateVersion(createLaunchTemplateVersionRequest);
+            launchTemplateSpecification.withVersion(createLaunchTemplateVersionResult.getLaunchTemplateVersion().getVersionNumber().toString());
+        } catch (Exception e) {
+            log.error("Create template version error.", e.getMessage(), e);
+            return null;
+        }
+
+    	configRequest.withLaunchTemplateSpecification(launchTemplateSpecification);
+    	List<FleetLaunchTemplateOverridesRequest> fleetLauchTemplateOverrideRequestList = getFleetLaunchTemplateOverrideList(t,onDeamndRequest, fleetType);
+    	configRequest.withOverrides(fleetLauchTemplateOverrideRequestList);
+    	templateConfigRequestList.add(configRequest);
+    	
+        if (log.isTraceEnabled()) {
+            log.trace("End in class AWSClient in method getFleetLaunchTemplateConfig with return: templateConfigRequestList: " + templateConfigRequestList);
+        }
+    	
+    	return templateConfigRequestList;
+
+    }
+    
+    public static TargetCapacitySpecificationRequest getTargetCapacitySpec(AwsTemplate t, boolean onDeamndRequest) {
+		if (log.isTraceEnabled()) {
+			log.trace("Start in class AWSClient in method getTargetCapacitySpec with parameters: t: " + t + ", onDeamndRequest: " + onDeamndRequest);
+		}
+    	
+    	TargetCapacitySpecificationRequest targetCapacitySpec = new TargetCapacitySpecificationRequest();
+    	targetCapacitySpec.withTotalTargetCapacity(t.getVmNumber());
+    	if (onDeamndRequest) {
+    		targetCapacitySpec.withDefaultTargetCapacityType(DefaultTargetCapacityType.OnDemand);
+    	} else {
+    		targetCapacitySpec.withDefaultTargetCapacityType(DefaultTargetCapacityType.Spot);	
+    	}
+    	
+        if (log.isTraceEnabled()) {
+            log.trace("End in class AWSClient in method getTargetCapacitySpec with return: targetCapacitySpec: " + targetCapacitySpec);
+        }
+    	return targetCapacitySpec;
+    }
+    
+    public static CreateFleetResult createVMByEC2Fleet(AwsTemplate t, String tagValue, boolean onDeamndRequest, FleetType fleetType, AwsEntity rsp) {
+        log.info("Start in class AWSClient in method createVMByEC2Fleet with parameters: t: " + t + ", tagValue: "
+                 + tagValue + ", onDeamndRequest: " + onDeamndRequest + ", fleetType: " + fleetType);
+        
+        List<FleetLaunchTemplateConfigRequest> templateConfigRequestList = null;
+        
+        try {
+        	AwsUtil.applyDefaultValuesForInstanceTemplate(t, onDeamndRequest);
+        	
+        	CreateFleetRequest fleetRequest = new CreateFleetRequest();
+        	templateConfigRequestList = getFleetLaunchTemplateConfig(t, tagValue, onDeamndRequest, fleetType);
+        	TargetCapacitySpecificationRequest targetCapacitySpec = getTargetCapacitySpec(t, onDeamndRequest);
+
+        	fleetRequest.withLaunchTemplateConfigs(templateConfigRequestList)
+        				.withTargetCapacitySpecification(targetCapacitySpec)
+        				.withType(fleetType)
+        				.withValidFrom(t.getRequestValidityStartTime())
+        				.withValidUntil(t.getRequestValidityEndTime())
+        				.withTerminateInstancesWithExpiration(false);
+
+        	if (onDeamndRequest) {
+        		OnDemandOptionsRequest onDemandOptions = new OnDemandOptionsRequest();
+        		onDemandOptions.withAllocationStrategy(t.getAllocationStrategy())
+        		.withMinTargetCapacity(1);
+        		fleetRequest.withOnDemandOptions(onDemandOptions);
+        	} else {
+        		SpotOptionsRequest spotOptions = new SpotOptionsRequest();
+        		spotOptions.withAllocationStrategy(t.getAllocationStrategy())
+        		.withMinTargetCapacity(1);
+        		fleetRequest.withSpotOptions(spotOptions);
+        	}
+        	
+        	CreateFleetResult fleetResult = ec2.createFleet(fleetRequest);
+        	
+            return fleetResult;
+            
+        } catch (AmazonServiceException ase) {
+            if (rsp != null) {
+                if (isFatalError(ase.getErrorCode())) {
+                    rsp.setStatus(AwsConst.EBROKERD_STATE_ERROR);
+                } else {
+                    rsp.setStatus(AwsConst.EBROKERD_STATE_WARNING);
+                }
+                rsp.setRsp(1, "Request EC2 Fleet Instance on " + AwsUtil.getProviderName() + " EC2 failed. " + ase.getMessage());
+            }
+            log.error("Create instances error." + ase.getMessage(), ase);
+            if (templateConfigRequestList != null && !templateConfigRequestList.isEmpty()) {
+                deleteEC2FleetLaunchTemplate(templateConfigRequestList, t);
+            }
+        } catch (AmazonClientException ace) {
+            if (rsp != null) {
+                rsp.setStatus(AwsConst.EBROKERD_STATE_WARNING);
+                rsp.setRsp(1, "Request EC2 Fleet Instance on " + AwsUtil.getProviderName()
+                           + " EC2 failed." + ace.getMessage());
+            }
+            log.error("Create instances error." + ace.getMessage(), ace);
+            if (templateConfigRequestList != null && !templateConfigRequestList.isEmpty()) {
+            	deleteEC2FleetLaunchTemplate(templateConfigRequestList, t);
+            }
+        } catch (Exception e) {
+            if (rsp != null) {
+                rsp.setStatus(AwsConst.EBROKERD_STATE_WARNING);
+                rsp.setRsp(1, "Request EC2 Fleet Instance on " + AwsUtil.getProviderName()
+                           + " EC2 failed." + e.getMessage());
+            }
+            log.error("Create instances error.", e);
+            if (templateConfigRequestList != null && !templateConfigRequestList.isEmpty()) {
+            	deleteEC2FleetLaunchTemplate(templateConfigRequestList, t);
+            }
+        }
+
+        return null;
+            
+    }
+
 
     /**
      *
@@ -325,7 +566,6 @@ public class AWSClient {
     public static Reservation createVM(AwsTemplate t, String tagValue, AwsEntity rsp) {
         log.info("Start in class AWSClient in method createVM with parameters: t: " + t + ", tagValue: "
                  + tagValue );
-
         try {
             RunInstancesRequest req = new RunInstancesRequest();
 
@@ -1207,7 +1447,7 @@ public class AWSClient {
             boolean validSpotInstanceRequest = AwsUtil.validateSpotInstanceRequest(t);
             if (validSpotInstanceRequest) {
 
-                AwsUtil.applyDefaultValuesForSpotInstanceTemplate(t);
+                AwsUtil.applyDefaultValuesForInstanceTemplate(t, false);
 
                 RequestSpotFleetRequest spotFleetRequest = new RequestSpotFleetRequest();
                 SpotFleetRequestConfigData configData = new SpotFleetRequestConfigData();
@@ -1450,6 +1690,114 @@ public class AWSClient {
         return launchTemplateConfigList;
     }
 
+    
+    /**
+     * 1. Updates the status of the machine request by checking the Spot Fleet status<br>
+     * 2. Return the machines newly created since the last request check
+     * @param awsRequest
+     * @return The list of machines newly created since the last request
+     */
+    public static List<AwsMachine> updateEC2FleetStatus(AwsRequest awsRequest) {
+
+        if (log.isDebugEnabled()) {
+            log.debug("Start in class AWSClient in method updateEC2FleetStatus with parameters: awsRequest: "
+                      + awsRequest);
+        }
+        List<AwsMachine> newMachinesList = new ArrayList<AwsMachine>();
+        String fleetRequestId = awsRequest.getReqId();
+        
+        DescribeFleetsRequest describeFleetsRequest = new DescribeFleetsRequest();
+        describeFleetsRequest.setFleetIds(Arrays
+                .asList(new String[] { fleetRequestId }));
+        String ebrokerdRequestStatus = null;
+        DescribeFleetsResult describeFleetsResult = null;
+
+        try {
+        	describeFleetsResult = ec2.describeFleets(describeFleetsRequest);
+        } catch (AmazonServiceException ase) {
+            if (ase.getErrorCode().contains("InvalidFleetId")) {
+                ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR;
+                awsRequest.setStatus(ebrokerdRequestStatus);
+            }
+            log.error("Cannot update EC2 fleet request <" + fleetRequestId + ">. " +  ase.getMessage(), ase);
+            return null;
+        } catch (Exception e) {
+            log.error("Cannot update Spot fleet request <" + fleetRequestId + ">. " +  e.getMessage(), e);
+            return null;
+        }
+        
+        //Get EC2 fleet request status
+        FleetData fleetData = describeFleetsResult.getFleets().get(0);
+        String fleetState = fleetData.getFleetState();
+        String fleetActivityStatus = fleetData.getActivityStatus();
+        log.debug("[Instance - " + fleetRequestId + "] State: " + fleetState);
+        log.debug("[Instance - " + fleetRequestId + "] Activity Status: " + fleetActivityStatus);
+        
+        if (BatchState.Submitted.toString().equals(fleetState)
+        		|| BatchState.Cancelled_terminating.toString().equals(
+        				fleetState)
+        		|| BatchState.Cancelled_running.toString().equals(
+        				fleetState)) {
+        	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_RUNNING;
+
+        } else if (BatchState.Active.toString().equals(fleetState)) {
+        	//One of the main reasons causing the Error status: When the price in the request is lower than the current market price
+        	if (ActivityStatus.Error.toString().equals(fleetActivityStatus)) {
+        		ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_RUNNING;
+        	} else if (ActivityStatus.Pending_fulfillment.toString().equals(
+        			fleetActivityStatus)
+        			|| ActivityStatus.Pending_termination.toString().equals(
+        					fleetActivityStatus)) {
+        		ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_RUNNING;
+        	} else if (ActivityStatus.Fulfilled.toString().equals(
+        			fleetActivityStatus)) {
+        		ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
+        	}
+        } else if (BatchState.Cancelled.toString().equals(fleetState)) {
+        	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
+        } else if (BatchState.Failed.toString().equals(ebrokerdRequestStatus)) {
+        	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR;
+        }
+        
+        // Setting the status of the request
+        awsRequest.setStatus(ebrokerdRequestStatus);
+        
+        //Get instances created by this fleet request, checking if there are new instances created 
+        DescribeFleetInstancesRequest describeFleetInstancesRequest = new DescribeFleetInstancesRequest ();
+        describeFleetInstancesRequest.setFleetId(fleetRequestId);
+        DescribeFleetInstancesResult describeFleetInstancesResult = ec2.describeFleetInstances(describeFleetInstancesRequest);
+        List<ActiveInstance> activeInstances = describeFleetInstancesResult.getActiveInstances();
+        log.debug("Active Instances for EC2 fleet request "
+                + describeFleetInstancesResult.getFleetId() + " : " + activeInstances);
+        
+        for (ActiveInstance activeInstance: activeInstances) {
+            // If the system does not have this activeInstance, add it to the
+            // newMachines list
+        	AwsMachine tempAwsMachine = new AwsMachine();
+        	tempAwsMachine.setMachineId(activeInstance.getInstanceId());
+        	if (!awsRequest.getMachines().contains(tempAwsMachine)) {
+        		log.debug("This is a newly created machine: " + activeInstance);
+        		newMachinesList.add(tempAwsMachine);
+        	}
+        }
+
+        if (!newMachinesList.isEmpty()) {
+
+            // Add the new machines to the actual machines list
+            log.trace("The count of machines before adding new machines: "
+                      + awsRequest.getMachines().size());
+            awsRequest.getMachines().addAll(newMachinesList);
+            log.trace("The count of machines after adding new machines: "
+                      + awsRequest.getMachines().size());
+
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("End in class AWSClient in method updateEC2FleetStatus with return: void: "
+                      + newMachinesList);
+        }
+        return newMachinesList;
+    }
+
 
     /**
      * 1. Updates the status of the machine request by checking the Spot Fleet status<br>
@@ -1591,12 +1939,34 @@ public class AWSClient {
 
     }
 
+    public static void deleteEC2FleetLaunchTemplate(List<FleetLaunchTemplateConfigRequest> fleetLaunchTmeplateConfigList, AwsTemplate t) {
+
+    	try {
+    		if (fleetLaunchTmeplateConfigList != null &&
+    				!fleetLaunchTmeplateConfigList.isEmpty()) {
+    			if (!StringUtils.isNullOrEmpty(t.getLaunchTemplateId())) {
+    				DeleteLaunchTemplateVersionsRequest deleteLaunchTemplateVersionsRequest = new DeleteLaunchTemplateVersionsRequest();
+    				deleteLaunchTemplateVersionsRequest.withLaunchTemplateId(fleetLaunchTmeplateConfigList.get(0).getLaunchTemplateSpecification().getLaunchTemplateId());
+    				deleteLaunchTemplateVersionsRequest.withVersions(fleetLaunchTmeplateConfigList.get(0).getLaunchTemplateSpecification().getVersion());
+    				DeleteLaunchTemplateVersionsResult deleteLaunchTemplateVersionsResult = ec2.deleteLaunchTemplateVersions(deleteLaunchTemplateVersionsRequest);
+
+    			}
+    		}
+        } catch (AmazonServiceException ase) {
+            log.error("Cannot delete EC2 Fleet template for fleet request " +  ase.getMessage(), ase);
+        } catch (Exception e) {
+            log.error("Cannot delete template for EC2 Fleet request " +  e.getMessage(), e);
+        }
+
+    }
+    
+    
     /**
      * Deletes the template for a spot request
      *
      * @param awsRequest
     */
-    public static void deleteFleetTemplateForAwsRequest(AwsRequest awsRequest) {
+    public static void deleteSpotFleetTemplateForAwsRequest(AwsRequest awsRequest) {
 
         log.debug("delete template for spot request " + awsRequest.getReqId());
         String spotFleetRequestId = awsRequest.getReqId();
@@ -1630,6 +2000,37 @@ public class AWSClient {
             log.error("Cannot delete template for Spot fleet request <" + spotFleetRequestId + ">. " +  e.getMessage(), e);
         }
 
+    }
+    
+    
+    /**
+     * Deletes the template for a EC2 Fleet request
+     *
+     * @param awsRequest
+    */
+    public static void deleteEC2FleetTemplateForAwsRequest(AwsRequest awsRequest) {
+    	
+        log.debug("delete template for EC2 Fleet request " + awsRequest.getReqId());
+        String fleetRequestId = awsRequest.getReqId();
+        DescribeFleetsRequest describeFleetsRequest = new DescribeFleetsRequest();
+        describeFleetsRequest.setFleetIds(Arrays
+                .asList(new String[] { fleetRequestId }));
+        try {
+        	DescribeFleetsResult describeFleetsResult = ec2.describeFleets(describeFleetsRequest);
+        	FleetData fleetData = describeFleetsResult.getFleets().get(0);
+        	FleetLaunchTemplateConfig fleetLaunchTemplateConfig = fleetData.getLaunchTemplateConfigs().get(0);
+        	AwsTemplate t = AwsUtil.getTemplateFromFile(awsRequest.getTemplateId());
+        	if (!StringUtils.isNullOrEmpty(t.getLaunchTemplateId())) {
+                DeleteLaunchTemplateVersionsRequest deleteLaunchTemplateVersionsRequest = new DeleteLaunchTemplateVersionsRequest();
+                deleteLaunchTemplateVersionsRequest.withLaunchTemplateId(fleetLaunchTemplateConfig.getLaunchTemplateSpecification().getLaunchTemplateId());
+                deleteLaunchTemplateVersionsRequest.withVersions(fleetLaunchTemplateConfig.getLaunchTemplateSpecification().getVersion());
+                DeleteLaunchTemplateVersionsResult deleteLaunchTemplateVersionsResult = ec2.deleteLaunchTemplateVersions(deleteLaunchTemplateVersionsRequest);
+        	}
+        } catch (AmazonServiceException ase) {
+            log.error("Cannot delete template for EC2 Fleet request <" + fleetRequestId + ">. " +  ase.getMessage(), ase);
+        } catch (Exception e) {
+            log.error("Cannot delete template for  EC2 Fleet request <" + fleetRequestId + ">. " +  e.getMessage(), e);
+        }
     }
 
     /**

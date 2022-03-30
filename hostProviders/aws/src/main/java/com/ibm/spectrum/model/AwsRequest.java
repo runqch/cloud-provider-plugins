@@ -18,6 +18,7 @@ package com.ibm.spectrum.model;
 
 import java.util.List;
 
+import com.amazonaws.services.ec2.model.FleetType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -111,6 +112,14 @@ public class AwsRequest {
     @JsonProperty("hostAllocationType")
     @JsonInclude(Include.NON_NULL)
     private String hostAllocationType;
+    
+    /**
+     * Type of EC2 fleet request: instant, request
+     */
+    @JsonProperty("fleetType")
+    @JsonInclude(Include.NON_NULL)
+    private FleetType fleetType;
+    
 
     /**
     * <p>Title: </p>
@@ -313,6 +322,8 @@ public class AwsRequest {
         builder.append(tagValue);
         builder.append(", allocationtype=");
         builder.append(hostAllocationType);
+        builder.append(", fleetType=");
+        builder.append(fleetType);
         builder.append("]");
         return builder.toString();
     }
@@ -332,5 +343,13 @@ public class AwsRequest {
     public void setTemplateId(String templateId) {
         this.templateId = templateId;
     }
+
+	public FleetType getFleetType() {
+		return fleetType;
+	}
+
+	public void setFleetType(FleetType fleetType) {
+		this.fleetType = fleetType;
+	}
 
 }
