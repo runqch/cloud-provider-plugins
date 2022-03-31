@@ -32,6 +32,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.amazonaws.services.ec2.model.CreateFleetInstance;
+import com.amazonaws.services.ec2.model.CreateFleetRequest;
 import com.amazonaws.services.ec2.model.CreateFleetResult;
 import com.amazonaws.services.ec2.model.FleetType;
 import com.amazonaws.services.ec2.model.Instance;
@@ -86,6 +87,8 @@ public class AwsImpl implements IAws {
         String userDataStr = "";
         File jf = new File(AwsUtil.getConfDir() + File.separator + "conf"
                            + File.separator + "awsprov_templates.json");
+        File ec2f = new File(AwsUtil.getConfDir() + File.separator + "conf"
+        		+ File.separator + "ec2-fleet-config.json");
         if (!jf.exists()) {
             rsp = new AwsEntity();
             rsp.setStatus(AwsConst.EBROKERD_STATE_ERROR);
@@ -98,6 +101,9 @@ public class AwsImpl implements IAws {
         }
 
         rsp = AwsUtil.toObject(jf, AwsEntity.class);
+        CreateFleetRequest request = AwsUtil.toObject(ec2f, CreateFleetRequest.class);
+        log.debug("EC2 fleet request: " + request);
+        
         if (rsp == null
                 || CollectionUtils.isNullOrEmpty(rsp.getTemplates()) ) {
             if (rsp == null) {
