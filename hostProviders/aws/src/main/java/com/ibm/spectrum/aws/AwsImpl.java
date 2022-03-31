@@ -101,7 +101,7 @@ public class AwsImpl implements IAws {
         }
 
         rsp = AwsUtil.toObject(jf, AwsEntity.class);
-        CreateFleetRequest request = AwsUtil.toObject(ec2f, CreateFleetRequest.class);
+        CreateFleetRequest request = AwsUtil.toObjectCaseInsensitive(ec2f, CreateFleetRequest.class);
         log.debug("EC2 fleet request: " + request);
         
         if (rsp == null

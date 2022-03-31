@@ -95,6 +95,7 @@ import com.amazonaws.services.ec2.model.SpotInstanceStatus;
 import com.amazonaws.services.ec2.model.SpotOptionsRequest;
 import com.amazonaws.services.ec2.model.TagSpecification;
 import com.amazonaws.services.ec2.model.TargetCapacitySpecificationRequest;
+import com.amazonaws.services.ec2.model.TargetCapacityUnitType;
 import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.ec2.model.ResourceType;
 import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
@@ -472,6 +473,8 @@ public class AWSClient {
     	} else {
     		targetCapacitySpec.withDefaultTargetCapacityType(DefaultTargetCapacityType.Spot);	
     	}
+    	targetCapacitySpec.withTargetCapacityUnitType(TargetCapacityUnitType.Vcpu);
+    	
     	
         if (log.isTraceEnabled()) {
             log.trace("End in class AWSClient in method getTargetCapacitySpec with return: targetCapacitySpec: " + targetCapacitySpec);

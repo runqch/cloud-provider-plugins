@@ -58,6 +58,7 @@ import com.amazonaws.services.ec2.model.LaunchTemplateTagSpecificationRequest;
 import com.amazonaws.util.CollectionUtils;
 import com.amazonaws.util.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ibm.spectrum.constant.AwsConst;
 import com.ibm.spectrum.model.AwsConfig;
@@ -347,6 +348,22 @@ public class AwsUtil {
         } catch(IOException e) {
             log.error("Change json file to object error.", e);
         }
+        
+
+        return null;
+    }
+    
+
+    public static <T> T toObjectCaseInsensitive(File jsonFile, Class<T> type) {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
+
+        try {
+            return (T) mapper.readValue(jsonFile, type);
+        } catch(IOException e) {
+            log.error("Change json file to object error.", e);
+        }
+        
 
         return null;
     }
@@ -1308,7 +1325,8 @@ public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
         	weight = 1.0;
         } else {
         	weight = weightedCapacityMap.get(instance.getInstanceType().toLowerCase());
-        }
+        }        
+        
         awsMachine.setWeightedCapacity(weight);
         log.debug("The weighted capacity of instance type: " + instance.getInstanceType() + " weight: " + weight + "templateId: " + templateId);
 
