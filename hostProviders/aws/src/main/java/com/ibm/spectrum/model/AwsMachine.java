@@ -93,7 +93,7 @@ public class AwsMachine {
     
     
     @JsonInclude(Include.NON_NULL)
-    private Double weightedCapacity; 
+    private Integer weightedCapacity; 
 
 
 	public void hide() {
@@ -309,14 +309,14 @@ public class AwsMachine {
     /**
      * @return Weighted capacity
      */
-    public Double getWeightedCapacity() {
+    public Integer getWeightedCapacity() {
 		return weightedCapacity;
 	}
 
     /**
      * @param Machine weighted capacity
     */
-	public void setWeightedCapacity(Double weightedCapacity) {
+	public void setWeightedCapacity(Integer weightedCapacity) {
 		this.weightedCapacity = weightedCapacity;
 	}
 

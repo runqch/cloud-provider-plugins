@@ -473,7 +473,7 @@ public class AWSClient {
     	} else {
     		targetCapacitySpec.withDefaultTargetCapacityType(DefaultTargetCapacityType.Spot);	
     	}
-    	targetCapacitySpec.withTargetCapacityUnitType(TargetCapacityUnitType.Vcpu);
+//    	targetCapacitySpec.withTargetCapacityUnitType(TargetCapacityUnitType.Vcpu);
     	
     	
         if (log.isTraceEnabled()) {

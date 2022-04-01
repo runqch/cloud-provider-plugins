@@ -1318,14 +1318,14 @@ public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
         // Set weighted capacity of this machine
         AwsTemplate usedTemplate = getTemplateFromFile(templateId);
         Map<String, Double> weightedCapacityMap = getWeightedCapacityMap(usedTemplate);
-        Double weight = 0.0;
-        if (weightedCapacityMap == null 
-        		|| weightedCapacityMap.size() == 0
-        		|| weightedCapacityMap.get(instance.getInstanceType().toLowerCase()) == null) {
-        	weight = 1.0;
-        } else {
-        	weight = weightedCapacityMap.get(instance.getInstanceType().toLowerCase());
-        }        
+        Integer weight = instance.getCpuOptions().getCoreCount();
+//        if (weightedCapacityMap == null 
+//        		|| weightedCapacityMap.size() == 0
+//        		|| weightedCapacityMap.get(instance.getInstanceType().toLowerCase()) == null) {
+//        	weight = 1.0;
+//        } else {
+//        	weight = weightedCapacityMap.get(instance.getInstanceType().toLowerCase());
+//        }        
         
         awsMachine.setWeightedCapacity(weight);
         log.debug("The weighted capacity of instance type: " + instance.getInstanceType() + " weight: " + weight + "templateId: " + templateId);
