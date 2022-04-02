@@ -217,7 +217,8 @@ public class AwsImpl implements IAws {
                 AwsRequest requestInDB = iterReq.next();
 
                 // Check Spot instances
-                if (HostAllocationType.Spot.toString().equals(requestInDB.getHostAllocationType())
+                if ((requestInDB.getFleetType() != null 
+                		|| HostAllocationType.Spot.toString().equals(requestInDB.getHostAllocationType()))
                         && !CollectionUtils.isNullOrEmpty(requestInDB.getMachines())) {
                     requestsToBeChecked.add(requestInDB);
                 }
@@ -443,7 +444,8 @@ public class AwsImpl implements IAws {
         FleetType fleetType = null;
         
         //If fleetType is defined, then go to EC2 fleet API
-        if (!StringUtils.isNullOrEmpty(at.getFleetType())) {
+        if (!StringUtils.isNullOrEmpty(at.getFleetConfig())
+        		|| !StringUtils.isNullOrEmpty(at.getFleetType())) {
         	boolean validRequest = AwsUtil.validateEC2FleetRequest(at);
         	if (!validRequest) {
         		rsp.setStatus(AwsConst.EBROKERD_STATE_WARNING);
@@ -459,11 +461,11 @@ public class AwsImpl implements IAws {
             hostAllocationType = HostAllocationType.Spot.toString();
         }
         
-        log.debug("info: " + at.getAttributes().get("ncpus").toString());
-        
-        Integer ncpus = Integer.parseInt(at.getAttributes().get("ncpus").get(1));
-        Integer targetCapacity = vmNum * ncpus * 2;
-        log.debug("ncpus = " + ncpus + ", targetCapacity = " + targetCapacity);
+//        log.debug("info: " + at.getAttributes().get("ncpus").toString());
+//        
+//        Integer ncpus = Integer.parseInt(at.getAttributes().get("ncpus").get(1));
+//        Integer targetCapacity = vmNum * ncpus * 2;
+//        log.debug("ncpus = " + ncpus + ", targetCapacity = " + targetCapacity);
         		
 
         String reqId = null;
@@ -471,15 +473,14 @@ public class AwsImpl implements IAws {
 
         // Request type is EC2 fleet
         if (fleetRequest) {
-        	fleetType = FleetType.fromValue(at.getFleetType().toLowerCase());
         	CreateFleetResult fleetResult = AWSClient.createVMByEC2Fleet(at, instanceTagVal, onDemandRequest, fleetType, rsp); 
-        	if (fleetType.equals(FleetType.Instant)) {
+        	if (at.getFleetType().equalsIgnoreCase(FleetType.Instant.toString())) {
         		List <CreateFleetInstance> fleetInstancesList = fleetResult.getInstances();
         		for (CreateFleetInstance fleetInstance: fleetInstancesList) {
         			for (String id: fleetInstance.getInstanceIds()) {
         				AwsMachine m = new AwsMachine();
         				m.setMachineId(id);
-        				m.setReqId(fleetResult.getFleetId());
+        				m.setRetId(fleetResult.getFleetId());
         				mLst.add(m);
         			}
         		}

@@ -342,7 +342,9 @@ public class AWSClient {
     		String instanceTypes = t.getVmType();
     		String[] instanceTypesArray = instanceTypes.split(",");
     		boolean weightDefined = false;
+    		boolean vmTypePriorityDefined = false;
     		List <Double> weightedCapacity = t.getWeightedCapacity();
+    		List <Double> vmTypePriority = t.getVmTypePriority();
     		if (!CollectionUtils.isNullOrEmpty(weightedCapacity)) {
     			if (instanceTypesArray.length != weightedCapacity.size()) {
     				log.error("EC2_CONFIG_ERROR: vmType and weightCapacity must have one-to-one correspondence");
@@ -350,6 +352,14 @@ public class AWSClient {
     			}
     			weightDefined = true;
     		}
+    		if (!CollectionUtils.isNullOrEmpty(vmTypePriority)) {
+    			if (instanceTypesArray.length != vmTypePriority.size()) {
+    				log.error("EC2_CONFIG_ERROR: vmType and vmTypePriority must have one-to-one correspondence");
+    				return lauchTemplateOverrideRequestList;
+    			}
+    			vmTypePriorityDefined = true;
+    		}		
+    		
 
     		int i = 0;
     		for (String instanceType : instanceTypesArray) {
@@ -357,7 +367,8 @@ public class AWSClient {
     				i ++;
     				continue;
     			}
-    			Double weight = weightDefined ? weightedCapacity.get(i) : 1.0;
+    			Double weight = weightDefined ? weightedCapacity.get(i) : null;
+    			Double priority = vmTypePriorityDefined ? vmTypePriority.get(i) : null;
     			//NOTICE: There are some differences for launchTemplateOverride configuration with different FleetType
     			//[Instant] - one vmType, one subnetId in each launchTemplateOverride
     			//[Request] - one vmType, multiple subnetId in each launchTemplateOverride
@@ -372,6 +383,7 @@ public class AWSClient {
     					launchTemplateOverride.withInstanceType(instanceType.trim());
     					launchTemplateOverride.withSubnetId(subnetId.trim());
     					launchTemplateOverride.withWeightedCapacity(weight);
+    					launchTemplateOverride.withPriority(priority);
     					launchTemplateOverride.withMaxPrice(maxPrice);
     					lauchTemplateOverrideRequestList.add(launchTemplateOverride);
     				}
@@ -381,6 +393,7 @@ public class AWSClient {
     				launchTemplateOverride.withInstanceType(instanceType.trim());
     				launchTemplateOverride.withSubnetId(t.getSubnetId());
     				launchTemplateOverride.withWeightedCapacity(weight);
+					launchTemplateOverride.withPriority(priority);
     				launchTemplateOverride.withMaxPrice(maxPrice);
     				lauchTemplateOverrideRequestList.add(launchTemplateOverride);	
     			}	
@@ -490,28 +503,37 @@ public class AWSClient {
         
         try {
         	AwsUtil.applyDefaultValuesForInstanceTemplate(t, onDeamndRequest);
-        	
         	CreateFleetRequest fleetRequest = new CreateFleetRequest();
-        	templateConfigRequestList = getFleetLaunchTemplateConfig(t, tagValue, onDeamndRequest, fleetType);
-        	TargetCapacitySpecificationRequest targetCapacitySpec = getTargetCapacitySpec(t, onDeamndRequest);
+        	
+        	if ( !StringUtils.isNullOrEmpty(t.getFleetConfig())) { //Generate request according to fleet config file
+        		fleetRequest = AwsUtil.toObjectCaseInsensitive(new File(t.getFleetConfig()), CreateFleetRequest.class);
+        		fleetRequest.getTargetCapacitySpecification().setTotalTargetCapacity(t.getVmNumber());
+        		fleetRequest.withValidFrom(t.getRequestValidityStartTime())
+        					.withValidUntil(t.getRequestValidityEndTime())
+        					.withTerminateInstancesWithExpiration(false);
+        		t.setFleetType(fleetRequest.getType());
+        	} else { //Generate request according to attribute defined
+        		templateConfigRequestList = getFleetLaunchTemplateConfig(t, tagValue, onDeamndRequest, fleetType);
+        		TargetCapacitySpecificationRequest targetCapacitySpec = getTargetCapacitySpec(t, onDeamndRequest);
 
-        	fleetRequest.withLaunchTemplateConfigs(templateConfigRequestList)
-        				.withTargetCapacitySpecification(targetCapacitySpec)
-        				.withType(fleetType)
-        				.withValidFrom(t.getRequestValidityStartTime())
-        				.withValidUntil(t.getRequestValidityEndTime())
-        				.withTerminateInstancesWithExpiration(false);
+        		fleetRequest.withLaunchTemplateConfigs(templateConfigRequestList)
+        		.withTargetCapacitySpecification(targetCapacitySpec)
+        		.withType(fleetType)
+        		.withValidFrom(t.getRequestValidityStartTime())
+        		.withValidUntil(t.getRequestValidityEndTime())
+        		.withTerminateInstancesWithExpiration(false);
 
-        	if (onDeamndRequest) {
-        		OnDemandOptionsRequest onDemandOptions = new OnDemandOptionsRequest();
-        		onDemandOptions.withAllocationStrategy(t.getAllocationStrategy())
-        		.withMinTargetCapacity(1);
-        		fleetRequest.withOnDemandOptions(onDemandOptions);
-        	} else {
-        		SpotOptionsRequest spotOptions = new SpotOptionsRequest();
-        		spotOptions.withAllocationStrategy(t.getAllocationStrategy())
-        		.withMinTargetCapacity(1);
-        		fleetRequest.withSpotOptions(spotOptions);
+        		if (onDeamndRequest) {
+        			OnDemandOptionsRequest onDemandOptions = new OnDemandOptionsRequest();
+        			onDemandOptions.withAllocationStrategy(t.getAllocationStrategy())
+        			.withMinTargetCapacity(1);
+        			fleetRequest.withOnDemandOptions(onDemandOptions);
+        		} else {
+        			SpotOptionsRequest spotOptions = new SpotOptionsRequest();
+        			spotOptions.withAllocationStrategy(t.getAllocationStrategy())
+        			.withMinTargetCapacity(1);
+        			fleetRequest.withSpotOptions(spotOptions);
+        		}
         	}
         	
         	CreateFleetResult fleetResult = ec2.createFleet(fleetRequest);
@@ -2145,17 +2167,28 @@ public class AWSClient {
 
                 if(!CollectionUtils.isNullOrEmpty(awsRequest.getMachines())) {
                     //Handle only Spot Instances for now
-                    if(HostAllocationType.Spot.toString().equals(awsRequest.getHostAllocationType())) {
-                        for(AwsMachine awsMachine : awsRequest.getMachines()) {
+                	if (awsRequest.getFleetType() != null) {
+                		for(AwsMachine awsMachine : awsRequest.getMachines()) {
                             //Only query running machines. Terminated machines have been already handled
                             if(!terminatedStates.contains(awsMachine.getStatus())) {
-                                spotInstanceRequestIdList.add(awsMachine.getReqId());
-                                machinesMap.put(awsMachine.getReqId(),awsMachine);
-                                requestsMap.put(awsMachine.getReqId(), awsRequest);
+                            	if (HostAllocationType.Spot.equals(awsMachine.getLifeCycleType())) { 
+                            		spotInstanceRequestIdList.add(awsMachine.getReqId());
+                            		machinesMap.put(awsMachine.getReqId(),awsMachine);
+                            		requestsMap.put(awsMachine.getReqId(), awsRequest);
+                            	}
                             }
-                        }
-
-                    }
+                		} 
+                	} else if (HostAllocationType.Spot.toString().equals(awsRequest.getHostAllocationType())) {
+                    	//Old spot fleet request may have no lifeCycleType
+                		for(AwsMachine awsMachine : awsRequest.getMachines()) {
+                			//Only query running machines. Terminated machines have been already handled
+                			if(!terminatedStates.contains(awsMachine.getStatus())) {
+                				spotInstanceRequestIdList.add(awsMachine.getReqId());
+                				machinesMap.put(awsMachine.getReqId(),awsMachine);
+                				requestsMap.put(awsMachine.getReqId(), awsRequest);
+                			}
+                		}
+                	}	
                     //TODO To be discussed, if handling is needed for on-demand instances that are notified from AWS side but their status is still shown as running in host factory side
                 }
             }

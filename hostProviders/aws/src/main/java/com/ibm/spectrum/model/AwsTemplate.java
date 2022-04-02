@@ -207,6 +207,16 @@ public class AwsTemplate {
     @JsonProperty("weightedCapacity")
     @JsonInclude(Include.NON_NULL)
     private List<Double> weightedCapacity;
+    
+    @JsonProperty("vmTypePriority")
+    @JsonInclude(Include.NON_NULL)
+    private List<Double> vmTypePriority;
+    
+
+    @JsonProperty("fleetConfig")
+    @JsonInclude(Include.NON_NULL)
+    private String fleetConfig; 
+  
 
 	/**
      * <p>Title: </p>
@@ -243,6 +253,8 @@ public class AwsTemplate {
         this.marketSpotPrice = t.getMarketSpotPrice();
         this.fleetType = t.getFleetType();
         this.weightedCapacity = t.getWeightedCapacity();
+        this.vmTypePriority = t.getVmTypePriority();
+        this.fleetConfig = t.getFleetConfig();
     }
 
     public void hide() {
@@ -610,6 +622,9 @@ public class AwsTemplate {
         builder.append(this.fleetType);
         builder.append(", weightedCapacity=");
         builder.append(this.weightedCapacity);
+        builder.append(", fleetConfig=");
+        builder.append(this.fleetConfig);       
+        
         builder.append("]");
         return builder.toString();
     }
@@ -693,5 +708,21 @@ public class AwsTemplate {
 
 	public void setWeightedCapacity(List<Double> weightedCapacity) {
 		this.weightedCapacity = weightedCapacity;
+	}
+	
+	public List<Double> getVmTypePriority() {
+		return vmTypePriority;
+	}
+
+	public void setVmTypePriority(List<Double> vmTypePriority) {
+		this.vmTypePriority = vmTypePriority;
+	}
+
+	public String getFleetConfig() {
+		return fleetConfig;
+	}
+
+	public void setFleetConfig(String fleetConfig) {
+		this.fleetConfig = fleetConfig;
 	}
 }

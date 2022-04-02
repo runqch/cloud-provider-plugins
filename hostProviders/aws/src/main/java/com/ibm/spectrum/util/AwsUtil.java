@@ -41,6 +41,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.amazonaws.services.ec2.model.AllocationStrategy;
+import com.amazonaws.services.ec2.model.CreateFleetRequest;
 import com.amazonaws.services.ec2.model.FleetType;
 import com.amazonaws.services.ec2.model.GroupIdentifier;
 import com.amazonaws.services.ec2.model.IamInstanceProfileSpecification;
@@ -66,6 +67,7 @@ import com.ibm.spectrum.model.AwsEntity;
 import com.ibm.spectrum.model.AwsMachine;
 import com.ibm.spectrum.model.AwsRequest;
 import com.ibm.spectrum.model.AwsTemplate;
+import com.ibm.spectrum.model.HostAllocationType;
 
 /**
 * @ClassName: AwsUtil
@@ -976,35 +978,69 @@ public class AwsUtil {
      * @return
      */
     public static boolean validateEC2FleetRequest(AwsTemplate awsTemplate) {
-    	
-    	FleetType fleetType = FleetType.fromValue(awsTemplate.getFleetType().toLowerCase());
-    	
-    	if (FleetType.Maintain.equals(fleetType)) {
-        	log.error("EC2_CONFIG_ERROR: Unsupported Fleet Type 'Maintain'");
-        	return false;
+    	String configFilePath = null;
+    	if (!StringUtils.isNullOrEmpty(awsTemplate.getFleetConfig())) {
+    		if (awsTemplate.getFleetConfig().startsWith("/")) {
+    			configFilePath = awsTemplate.getFleetConfig();	
+    		} else {
+    			configFilePath = AwsUtil.getConfDir() + File.separator + "conf"
+    	        		+ File.separator + awsTemplate.getFleetConfig();
+    		}
+
+    		File fleetConfigFile = new File (configFilePath);
+    		CreateFleetRequest request = AwsUtil.toObjectCaseInsensitive(fleetConfigFile, CreateFleetRequest.class);
+    		FleetType type = FleetType.fromValue(request.getType());
+    		if (StringUtils.isNullOrEmpty(request.getType()) 
+    				|| FleetType.Maintain.equals(type)) {
+    			log.error("EC2_CONFIG_ERROR: Fleet Type undefined or defined to 'Maintain', only 'Instant' or 'Request' type is support");
+    			return false;
+    		}
+    		awsTemplate.setFleetConfig(configFilePath);
+       		awsTemplate.setFleetType(request.getType());
+    	} else if (!StringUtils.isNullOrEmpty(awsTemplate.getFleetType())) {
+
+    		FleetType fleetType = FleetType.fromValue(awsTemplate.getFleetType().toLowerCase());
+
+    		if (FleetType.Maintain.equals(fleetType)) {
+    			log.error("EC2_CONFIG_ERROR: Unsupported Fleet Type 'Maintain'");
+    			return false;
+    		}
+
+    		if (StringUtils.isNullOrEmpty(awsTemplate.getLaunchTemplateId())) {
+    			log.error("EC2_CONFIG_ERROR: Missing required parameter launchTemplateId");
+    			return false;
+    		}
+
+    		if (!StringUtils.isNullOrEmpty(awsTemplate.getVmType())) {
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
+    				int numOfvmType = awsTemplate.getVmType().split(",").length;
+    				int numOfWeightedCapacity = awsTemplate.getWeightedCapacity().size();
+    				if (numOfvmType != numOfWeightedCapacity) {
+    					log.error("EC2_CONFIG_ERROR: vmType and weightCapacity must have one-to-one correspondence");
+    					return false;
+    				}
+    			} else {
+    				log.warn("EC2_CONFIG_WARN: no weightCapacity defined, set default to 1");
+    			}
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getVmTypePriority())) {
+    				int numOfvmType = awsTemplate.getVmType().split(",").length;
+    				int numOfPriority = awsTemplate.getVmTypePriority().size();
+    				if (numOfvmType != numOfPriority) {
+    					log.error("EC2_CONFIG_ERROR: vmType and numOfPriority must have one-to-one correspondence");
+    					return false;
+    				}
+    			} else {
+    				log.warn("EC2_CONFIG_WARN: no vmTypePriority defined, set default to 1");
+    			}	
+    		} else {
+    			if (CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
+    				log.warn("EC2_CONFIG_WARN: weightedCapacity ignored due to no vmType defined");
+    			}
+    			if (CollectionUtils.isNullOrEmpty(awsTemplate.getVmTypePriority())) {
+    				log.warn("EC2_CONFIG_WARN: vmTypePriority ignored due to no vmType defined");
+    			}
+    		}
     	}
-    	
-        if (StringUtils.isNullOrEmpty(awsTemplate.getLaunchTemplateId())) {
-        	log.error("EC2_CONFIG_ERROR: Missing required parameter launchTemplateId");
-        	return false;
-        }
-        
-        if (!StringUtils.isNullOrEmpty(awsTemplate.getVmType())) {
-        	if (!CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
-        		int numOfvmType = awsTemplate.getVmType().split(",").length;
-        		int numOfWeightedCapacity = awsTemplate.getWeightedCapacity().size();
-        		if (numOfvmType != numOfWeightedCapacity) {
-        			log.error("EC2_CONFIG_ERROR: vmType and weightCapacity must have one-to-one correspondence");
-        			return false;
-        		}
-        	} else {
-        		log.warn("EC2_CONFIG_WARN: no weightCapacity defined, set default to 1");
-        	}
-        } else {
-        	if (CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
-        		log.warn("EC2_CONFIG_WARN: weightCapacity ignored due to no vmType defined");
-        	}
-        }
 
         return true;
     }
@@ -1296,10 +1332,13 @@ public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
         awsMachine.setPublicIpAddress(instance.getPublicIpAddress());
         // If this is a spot instance, set the machine's request ID with the
         // spot instance request ID not the spot fleet request ID
+        
         if(InstanceLifecycleType.Spot.toString().equals(instance.getInstanceLifecycle())) {
+        	awsMachine.setLifeCycleType(HostAllocationType.Spot);
             awsMachine.setReqId(instance.getSpotInstanceRequestId());
         } else {
             awsMachine.setReqId(reqId);
+            awsMachine.setLifeCycleType(HostAllocationType.OnDemand);
         }
         awsMachine.setTemplate(templateId);
         awsMachine.setName(instance.getPrivateDnsName());

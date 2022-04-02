@@ -16,6 +16,7 @@
 
 package com.ibm.spectrum.model;
 
+import com.amazonaws.services.ec2.model.InstanceLifecycleType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -91,10 +92,12 @@ public class AwsMachine {
     @JsonInclude(Include.NON_NULL)
     private String publicDnsName;
     
-    
     @JsonInclude(Include.NON_NULL)
-    private Integer weightedCapacity; 
+    private HostAllocationType lifeCycleType;
+    
 
+	@JsonInclude(Include.NON_NULL)
+    private Integer weightedCapacity; 
 
 	public void hide() {
         this.reqId = null;
@@ -319,6 +322,15 @@ public class AwsMachine {
 	public void setWeightedCapacity(Integer weightedCapacity) {
 		this.weightedCapacity = weightedCapacity;
 	}
+	
+    
+    public HostAllocationType getLifeCycleType() {
+		return lifeCycleType;
+	}
+
+	public void setLifeCycleType(HostAllocationType lifeCycleType) {
+		this.lifeCycleType = lifeCycleType;
+	}
 
 
     /** (Non Javadoc)
@@ -356,6 +368,8 @@ public class AwsMachine {
         builder.append(msg);
         builder.append(", status=");
         builder.append(status);
+        builder.append(", lifeCycleType=");
+        builder.append(lifeCycleType);
         builder.append(", weightedCapacity=");
         builder.append(weightedCapacity);
         builder.append("]");
