@@ -1316,9 +1316,10 @@ public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
         awsMachine.setLaunchtime(mlaunchtime);
         
         // Set weighted capacity of this machine
-        AwsTemplate usedTemplate = getTemplateFromFile(templateId);
-        Map<String, Double> weightedCapacityMap = getWeightedCapacityMap(usedTemplate);
-        Integer weight = instance.getCpuOptions().getCoreCount();
+ //       AwsTemplate usedTemplate = getTemplateFromFile(templateId);
+//        Map<String, Double> weightedCapacityMap = getWeightedCapacityMap(usedTemplate);
+        
+
 //        if (weightedCapacityMap == null 
 //        		|| weightedCapacityMap.size() == 0
 //        		|| weightedCapacityMap.get(instance.getInstanceType().toLowerCase()) == null) {
@@ -1326,6 +1327,16 @@ public static Map<String, Double> getWeightedCapacityMap(AwsTemplate t) {
 //        } else {
 //        	weight = weightedCapacityMap.get(instance.getInstanceType().toLowerCase());
 //        }        
+        
+    
+        String ncpusUnit = System.getenv("EGO_DEFINE_NCPUS");
+        Integer weight = 0;  
+        
+        if ("threads".equals(ncpusUnit)) {
+        	weight = instance.getCpuOptions().getCoreCount() * instance.getCpuOptions().getThreadsPerCore();
+        } else {
+        	weight = instance.getCpuOptions().getCoreCount();
+        }
         
         awsMachine.setWeightedCapacity(weight);
         log.debug("The weighted capacity of instance type: " + instance.getInstanceType() + " weight: " + weight + "templateId: " + templateId);
