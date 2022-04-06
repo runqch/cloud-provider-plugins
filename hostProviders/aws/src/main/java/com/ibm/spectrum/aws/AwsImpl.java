@@ -449,6 +449,7 @@ public class AwsImpl implements IAws {
         		return rsp;
         	}
         	fleetRequest = true;
+        	fleetType = FleetType.fromValue(at.getFleetType().toLowerCase());
         }
         
         //If the spotPrice is defined then this is Spot Pricing request
