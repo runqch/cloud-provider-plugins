@@ -87,8 +87,6 @@ public class AwsImpl implements IAws {
         String userDataStr = "";
         File jf = new File(AwsUtil.getConfDir() + File.separator + "conf"
                            + File.separator + "awsprov_templates.json");
-        File ec2f = new File(AwsUtil.getConfDir() + File.separator + "conf"
-        		+ File.separator + "ec2-fleet-config.json");
         if (!jf.exists()) {
             rsp = new AwsEntity();
             rsp.setStatus(AwsConst.EBROKERD_STATE_ERROR);
@@ -101,8 +99,6 @@ public class AwsImpl implements IAws {
         }
 
         rsp = AwsUtil.toObject(jf, AwsEntity.class);
-        CreateFleetRequest request = AwsUtil.toObjectCaseInsensitive(ec2f, CreateFleetRequest.class);
-        log.debug("EC2 fleet request: " + request);
         
         if (rsp == null
                 || CollectionUtils.isNullOrEmpty(rsp.getTemplates()) ) {
@@ -443,7 +439,7 @@ public class AwsImpl implements IAws {
         String hostAllocationType = HostAllocationType.OnDemand.toString();
         FleetType fleetType = null;
         
-        //If fleetType is defined, then go to EC2 fleet API
+        //If fleetType or fleetConfig defined, then go to EC2 fleet API
         if (!StringUtils.isNullOrEmpty(at.getFleetConfig())
         		|| !StringUtils.isNullOrEmpty(at.getFleetType())) {
         	boolean validRequest = AwsUtil.validateEC2FleetRequest(at);
@@ -459,14 +455,7 @@ public class AwsImpl implements IAws {
         if (at.getSpotPrice() != null && at.getSpotPrice() > 0f) {
             onDemandRequest = false;
             hostAllocationType = HostAllocationType.Spot.toString();
-        }
-        
-//        log.debug("info: " + at.getAttributes().get("ncpus").toString());
-//        
-//        Integer ncpus = Integer.parseInt(at.getAttributes().get("ncpus").get(1));
-//        Integer targetCapacity = vmNum * ncpus * 2;
-//        log.debug("ncpus = " + ncpus + ", targetCapacity = " + targetCapacity);
-        		
+        }       		
 
         String reqId = null;
         List<AwsMachine> mLst = new ArrayList<AwsMachine>();

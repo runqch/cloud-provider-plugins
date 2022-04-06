@@ -992,7 +992,7 @@ public class AwsUtil {
     		FleetType type = FleetType.fromValue(request.getType());
     		if (StringUtils.isNullOrEmpty(request.getType()) 
     				|| FleetType.Maintain.equals(type)) {
-    			log.error("EC2_CONFIG_ERROR: Fleet Type undefined or defined to 'Maintain', only 'Instant' or 'Request' type is support");
+    			log.error("EC2_CONFIG_ERROR: Fleet Type not defined or defined to unsupported type 'Maintain'in <%s> , only 'Instant' or 'Request' type is supported", configFilePath);
     			return false;
     		}
     		awsTemplate.setFleetConfig(configFilePath);
@@ -1002,7 +1002,7 @@ public class AwsUtil {
     		FleetType fleetType = FleetType.fromValue(awsTemplate.getFleetType().toLowerCase());
 
     		if (FleetType.Maintain.equals(fleetType)) {
-    			log.error("EC2_CONFIG_ERROR: Unsupported Fleet Type 'Maintain'");
+    			log.error("EC2_CONFIG_ERROR: Unsupported Fleet Type 'Maintain', only 'Instant' or 'Request' type is supported");
     			return false;
     		}
 
@@ -1020,24 +1020,38 @@ public class AwsUtil {
     					return false;
     				}
     			} else {
-    				log.warn("EC2_CONFIG_WARN: no weightCapacity defined, set default to 1");
+    				log.warn("EC2_CONFIG_WARN: no weightCapacity defined, considering all these vmType have same weight");
     			}
     			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getVmTypePriority())) {
     				int numOfvmType = awsTemplate.getVmType().split(",").length;
     				int numOfPriority = awsTemplate.getVmTypePriority().size();
     				if (numOfvmType != numOfPriority) {
-    					log.error("EC2_CONFIG_ERROR: vmType and numOfPriority must have one-to-one correspondence");
+    					log.error("EC2_CONFIG_ERROR: vmType and vmTypePriority must have one-to-one correspondence");
     					return false;
     				}
     			} else {
-    				log.warn("EC2_CONFIG_WARN: no vmTypePriority defined, set default to 1");
+    				log.warn("EC2_CONFIG_WARN: no vmTypePriority defined, consider all these vmType have same priority");
     			}	
+    			
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getMaxPrice())) {
+    				int numOfvmType = awsTemplate.getVmType().split(",").length;
+    				int numOfMaxPrice = awsTemplate.getMaxPrice().size();
+    				if (numOfvmType != numOfMaxPrice) {
+    					log.error("EC2_CONFIG_ERROR: vmType and maxPrice must have one-to-one correspondence");
+    					return false;
+    				}
+    			} else {
+    				log.warn("EC2_CONFIG_WARN: no maxPrice defined, use default maxPrice");
+    			}
     		} else {
-    			if (CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getWeightedCapacity())) {
     				log.warn("EC2_CONFIG_WARN: weightedCapacity ignored due to no vmType defined");
     			}
-    			if (CollectionUtils.isNullOrEmpty(awsTemplate.getVmTypePriority())) {
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getVmTypePriority())) {
     				log.warn("EC2_CONFIG_WARN: vmTypePriority ignored due to no vmType defined");
+    			}
+    			if (!CollectionUtils.isNullOrEmpty(awsTemplate.getMaxPrice())) {
+    				log.warn("EC2_CONFIG_WARN: maxPrie ignored due to no vmType defined");
     			}
     		}
     	}

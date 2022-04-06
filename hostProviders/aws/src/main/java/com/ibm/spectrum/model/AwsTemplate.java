@@ -212,8 +212,12 @@ public class AwsTemplate {
     @JsonInclude(Include.NON_NULL)
     private List<Double> vmTypePriority;
     
+    @JsonProperty("maxPrice")
+    @JsonInclude(Include.NON_NULL)
+    private List<Double> maxPrice;
+   
 
-    @JsonProperty("fleetConfig")
+	@JsonProperty("fleetConfig")
     @JsonInclude(Include.NON_NULL)
     private String fleetConfig; 
   
@@ -254,6 +258,7 @@ public class AwsTemplate {
         this.fleetType = t.getFleetType();
         this.weightedCapacity = t.getWeightedCapacity();
         this.vmTypePriority = t.getVmTypePriority();
+        this.maxPrice = t.getMaxPrice();
         this.fleetConfig = t.getFleetConfig();
     }
 
@@ -622,6 +627,10 @@ public class AwsTemplate {
         builder.append(this.fleetType);
         builder.append(", weightedCapacity=");
         builder.append(this.weightedCapacity);
+        builder.append(", vmTypePriority=");
+        builder.append(this.vmTypePriority);
+        builder.append(", maxPrice=");
+        builder.append(this.maxPrice);
         builder.append(", fleetConfig=");
         builder.append(this.fleetConfig);       
         
@@ -716,6 +725,14 @@ public class AwsTemplate {
 
 	public void setVmTypePriority(List<Double> vmTypePriority) {
 		this.vmTypePriority = vmTypePriority;
+	}
+	
+	public List<Double> getMaxPrice() {
+		return maxPrice;
+	}
+
+	public void setMaxPrice(List<Double> maxPrice) {
+		this.maxPrice = maxPrice;
 	}
 
 	public String getFleetConfig() {
