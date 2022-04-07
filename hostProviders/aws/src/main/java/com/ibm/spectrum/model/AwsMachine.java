@@ -90,8 +90,14 @@ public class AwsMachine {
      */
     @JsonInclude(Include.NON_NULL)
     private String publicDnsName;
+    
+    @JsonInclude(Include.NON_NULL)
+    private HostAllocationType lifeCycleType;
+    
 
-    public void hide() {
+
+
+	public void hide() {
         this.reqId = null;
         this.retId = null;
         this.template = null;
@@ -299,6 +305,15 @@ public class AwsMachine {
     public void setPublicDnsName(String name) {
         this.publicDnsName = name;
     }
+	
+    
+    public HostAllocationType getLifeCycleType() {
+		return lifeCycleType;
+	}
+
+	public void setLifeCycleType(HostAllocationType lifeCycleType) {
+		this.lifeCycleType = lifeCycleType;
+	}
 
 
     /** (Non Javadoc)
@@ -336,6 +351,8 @@ public class AwsMachine {
         builder.append(msg);
         builder.append(", status=");
         builder.append(status);
+        builder.append(", lifeCycleType=");
+        builder.append(lifeCycleType);
         builder.append("]");
         return builder.toString();
     }
@@ -357,8 +374,6 @@ public class AwsMachine {
         this.setResult(machineWithNewValues.getResult());
         this.setMsg(machineWithNewValues.getMsg());
         this.setStatus(machineWithNewValues.getStatus());
-
-
     }
 
     @Override
