@@ -91,7 +91,11 @@ public class AwsMachine {
     @JsonInclude(Include.NON_NULL)
     private String publicDnsName;
     
-    @JsonInclude(Include.NON_NULL)
+	@JsonInclude(Include.NON_NULL)
+    private Integer weightedCapacity; 
+    
+
+	@JsonInclude(Include.NON_NULL)
     private HostAllocationType lifeCycleType;
     
 
@@ -122,6 +126,8 @@ public class AwsMachine {
         this.rcAccount = m.getRcAccount();
         this.launchtime = m.getLaunchtime();
         this.publicDnsName = m.getPublicDnsName();
+        this.weightedCapacity = m.getWeightedCapacity();
+        this.lifeCycleType = m.getLifeCycleType();
     }
 
     /**
@@ -306,11 +312,34 @@ public class AwsMachine {
         this.publicDnsName = name;
     }
 	
+    /**
+     * 
+     * @return weighted capacity (slots)
+     */
+    public Integer getWeightedCapacity() {
+		return weightedCapacity;
+	}
     
+    /**
+     * 
+     * @param Set machine weighted capacity
+     */
+    public void setWeightedCapacity(Integer weightedCapacity) {
+		this.weightedCapacity = weightedCapacity;
+	}
+    
+    /**
+     * 
+     * @return Life cycle type of the instance: onDemand or spot
+     */
     public HostAllocationType getLifeCycleType() {
 		return lifeCycleType;
 	}
 
+    /**
+     * 
+     * @param lifeCycleType
+     */
 	public void setLifeCycleType(HostAllocationType lifeCycleType) {
 		this.lifeCycleType = lifeCycleType;
 	}
@@ -351,6 +380,8 @@ public class AwsMachine {
         builder.append(msg);
         builder.append(", status=");
         builder.append(status);
+        builder.append(", weightedCapacity=");
+        builder.append(weightedCapacity);
         builder.append(", lifeCycleType=");
         builder.append(lifeCycleType);
         builder.append("]");
@@ -374,6 +405,8 @@ public class AwsMachine {
         this.setResult(machineWithNewValues.getResult());
         this.setMsg(machineWithNewValues.getMsg());
         this.setStatus(machineWithNewValues.getStatus());
+        this.setWeightedCapacity(machineWithNewValues.getWeightedCapacity());
+        this.setLifeCycleType(machineWithNewValues.getLifeCycleType());
     }
 
     @Override
