@@ -998,11 +998,11 @@ public class AwsUtil {
     		}
     		
     		//Maintain type not supported
-    		if (StringUtils.isNullOrEmpty(request.getType()) 
-    				|| FleetType.Maintain.toString().equalsIgnoreCase(request.getType())) {
-    			rsp.setMsg("Type not defined or defined to unsupported type 'Maintain', only 'Instant' or 'Request' type is supported");
-    			return false;
-    		}
+//    		if (StringUtils.isNullOrEmpty(request.getType()) 
+//    				|| FleetType.Maintain.toString().equalsIgnoreCase(request.getType())) {
+//    			rsp.setMsg("Type not defined or defined to unsupported type 'Maintain', only 'Instant' or 'Request' type is supported");
+//    			return false;
+//    		}
     		
     		//TargetCapacityUnitType not supported
     		TargetCapacitySpecificationRequest targetCapacitySpecification = request.getTargetCapacitySpecification();

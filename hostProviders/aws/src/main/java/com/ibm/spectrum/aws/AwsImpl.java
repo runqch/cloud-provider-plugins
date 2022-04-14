@@ -296,7 +296,11 @@ public class AwsImpl implements IAws {
                 // remove empty instance on-demand request
                 if (CollectionUtils.isNullOrEmpty(mList)) {
                 	if (!StringUtils.isNullOrEmpty(requestInDB.getFleetType())) {
-                		if (FleetType.Request.toString().equalsIgnoreCase(requestInDB.getFleetType())) {
+                		if (FleetType.Instant.toString().equalsIgnoreCase(requestInDB.getFleetType())) {
+                 			log.debug("EC2 Fleet Instant type request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
+                 			AWSClient.deleteEC2FleetTemplateForAwsRequest(requestInDB);
+                 			iterReq.remove();
+                 		} else { //Request fleet type
                 			List<AwsMachine> newlyCreatedMachines = AWSClient.updateEC2FleetStatus(requestInDB);
                 			if ((requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE)
                 					|| requestInDB.getStatus().equals(AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR))
@@ -306,10 +310,6 @@ public class AwsImpl implements IAws {
                 				iterReq.remove();
                 				requestsToBeChecked.remove(requestInDB);
                 			}
-                		} else if (FleetType.Instant.toString().equalsIgnoreCase(requestInDB.getFleetType())) {
-                			log.debug("EC2 Fleet Instant type request <" + requestInDB.getReqId() + "> is empty. Remove it from the DB.");
-                			AWSClient.deleteEC2FleetTemplateForAwsRequest(requestInDB);
-                			iterReq.remove();
                 		}
                 	} else {
                 		if (HostAllocationType.Spot.toString().equals(requestInDB.getHostAllocationType())) {
@@ -790,7 +790,7 @@ public class AwsImpl implements IAws {
         //Request updates for machine termination does not need a spot fleet status update.
         if (statusUpdateForCreateMachine) {
         	if (!StringUtils.isNullOrEmpty(fReq.getFleetType())) {
-        		if (FleetType.Request.toString().equalsIgnoreCase(fReq.getFleetType())) {
+        		if (!FleetType.Instant.toString().equalsIgnoreCase(fReq.getFleetType())) {
             		newlyCreatedMachines = AWSClient.updateEC2FleetStatus(fReq);
             		latestRequestStatus = fReq.getStatus();
             		log.debug("Setting the EC2 Fleet request status: " + latestRequestStatus);
