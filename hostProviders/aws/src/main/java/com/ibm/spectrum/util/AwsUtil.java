@@ -992,12 +992,20 @@ public class AwsUtil {
     			return false;
     		}
     		
+    		if (awsTemplate.getOnDemandTargetCapacityRatio() != null
+    				&& (awsTemplate.getOnDemandTargetCapacityRatio() < 0.0
+    						|| awsTemplate.getOnDemandTargetCapacityRatio() > 1.0)) {
+    			rsp.setMsg("The specified OnDemandTargetCapacityRatio is invalid, please specify a value between 0.0 and 1.0");
+    			return false;
+    		}
+    		
     		CreateFleetRequest request = AwsUtil.toObjectCaseInsensitive(fleetConfigFile, CreateFleetRequest.class);
     		
     		if (request == null) {
     			rsp.setMsg("Error parsing fleet configuration file <" + configFilePath + ">");
     			return false;
     		}
+    		
     		
     		//Maintain type not supported
     		if (StringUtils.isNullOrEmpty(request.getType()) 
