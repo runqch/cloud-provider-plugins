@@ -991,7 +991,9 @@ public class AwsUtil {
     			rsp.setMsg("The specified fleet configuration file <" + configFilePath + "> does not exist");
     			return false;
     		}
+    		
     		CreateFleetRequest request = AwsUtil.toObjectCaseInsensitive(fleetConfigFile, CreateFleetRequest.class);
+    		
     		if (request == null) {
     			rsp.setMsg("Error parsing fleet configuration file <" + configFilePath + ">");
     			return false;
@@ -1321,17 +1323,13 @@ public class AwsUtil {
             mlaunchtime = 0L;
         awsMachine.setLaunchtime(mlaunchtime);
         
-        // Set weighted capacity (slots) of this machine       
-        String ncpusUnit = System.getenv("EGO_DEFINE_NCPUS");
-        Integer weight = 0;
-        if ("threads".equals(ncpusUnit)) {
-        	weight = instance.getCpuOptions().getCoreCount() * instance.getCpuOptions().getThreadsPerCore();
-        } else {
-        	weight = instance.getCpuOptions().getCoreCount();
-        }
+        //Set ncores and nthreads of this machine
+        Integer ncores = instance.getCpuOptions().getCoreCount();
+        Integer nthreads = ncores * instance.getCpuOptions().getThreadsPerCore();
+        awsMachine.setNcores(ncores);
+        awsMachine.setNthreads(nthreads);
         
-        awsMachine.setWeightedCapacity(weight);
-        log.debug("Instance type: " + instance.getInstanceType() + " weightedCapacity: " + weight + " templateId: " + templateId);
+        log.debug("Instance type: " + instance.getInstanceType() + ", ncores: " + ncores + ", nthreads: " + nthreads + ", templateId: " + templateId);
         
         if (log.isTraceEnabled()) {
             log.trace("End in class AwsUtil in method mapAwsInstanceToAwsMachine with return awsMachine:" + awsMachine);

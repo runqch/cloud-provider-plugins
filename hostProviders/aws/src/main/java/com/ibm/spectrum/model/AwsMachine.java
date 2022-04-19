@@ -91,14 +91,17 @@ public class AwsMachine {
     @JsonInclude(Include.NON_NULL)
     private String publicDnsName;
     
-	@JsonInclude(Include.NON_NULL)
-    private Integer weightedCapacity; 
-    
+	
+    @JsonInclude(Include.NON_NULL)
+    private Integer ncores; 
 
-	@JsonInclude(Include.NON_NULL)
+    @JsonInclude(Include.NON_NULL)
+    private Integer nthreads; 
+
+
+    @JsonInclude(Include.NON_NULL)
     private HostAllocationType lifeCycleType;
     
-
 
 
 	public void hide() {
@@ -126,7 +129,8 @@ public class AwsMachine {
         this.rcAccount = m.getRcAccount();
         this.launchtime = m.getLaunchtime();
         this.publicDnsName = m.getPublicDnsName();
-        this.weightedCapacity = m.getWeightedCapacity();
+        this.ncores = m.getNcores();
+        this.nthreads = m.getNthreads();
         this.lifeCycleType = m.getLifeCycleType();
     }
 
@@ -311,22 +315,40 @@ public class AwsMachine {
     public void setPublicDnsName(String name) {
         this.publicDnsName = name;
     }
-	
-    /**
-     * 
-     * @return weighted capacity (slots)
-     */
-    public Integer getWeightedCapacity() {
-		return weightedCapacity;
-	}
     
     /**
      * 
-     * @param Set machine weighted capacity
+     * @return number of cores
      */
-    public void setWeightedCapacity(Integer weightedCapacity) {
-		this.weightedCapacity = weightedCapacity;
+    public Integer getNcores() {
+		return ncores;
 	}
+
+    /**
+     * 
+     * @param Set number of cores
+     */
+	public void setNcores(Integer ncores) {
+		this.ncores = ncores;
+	}
+	
+	
+	 /**
+     * 
+     * @return number of threads
+     */
+	public Integer getNthreads() {
+		return nthreads;
+	}
+
+    /**
+     * 
+     * @param Set number of threads
+     */
+	public void setNthreads(Integer nthreads) {
+		this.nthreads = nthreads;
+	}
+
     
     /**
      * 
@@ -380,8 +402,10 @@ public class AwsMachine {
         builder.append(msg);
         builder.append(", status=");
         builder.append(status);
-        builder.append(", weightedCapacity=");
-        builder.append(weightedCapacity);
+        builder.append(", ncores=");
+        builder.append(ncores);
+        builder.append(", nthreads=");
+        builder.append(nthreads);
         builder.append(", lifeCycleType=");
         builder.append(lifeCycleType);
         builder.append("]");
@@ -405,7 +429,8 @@ public class AwsMachine {
         this.setResult(machineWithNewValues.getResult());
         this.setMsg(machineWithNewValues.getMsg());
         this.setStatus(machineWithNewValues.getStatus());
-        this.setWeightedCapacity(machineWithNewValues.getWeightedCapacity());
+        this.setNcores(machineWithNewValues.getNcores());
+        this.setNthreads(machineWithNewValues.getNthreads());
         this.setLifeCycleType(machineWithNewValues.getLifeCycleType());
     }
 
