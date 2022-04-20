@@ -1039,7 +1039,7 @@ public class AwsUtil {
     		}
     		
     		awsTemplate.setEc2FleetConfig(configFilePath);
-       		awsTemplate.setFleetType(request.getType());
+    		awsTemplate.setFleetType(request.getType());
     	}
 
         return true;
@@ -1312,7 +1312,7 @@ public class AwsUtil {
         
         if(InstanceLifecycleType.Spot.toString().equals(instance.getInstanceLifecycle())) {
         	awsMachine.setLifeCycleType(HostAllocationType.Spot);
-            awsMachine.setReqId(instance.getSpotInstanceRequestId());
+        	awsMachine.setReqId(instance.getSpotInstanceRequestId());
         } else {
             awsMachine.setReqId(reqId);
             awsMachine.setLifeCycleType(HostAllocationType.OnDemand);

@@ -1675,8 +1675,6 @@ public class AWSClient {
         log.debug("[EC2 Fleet request - " + fleetRequestId + "] Activity Status: " + fleetActivityStatus);
         
         if (FleetStateCode.Submitted.toString().equals(fleetState)
-        		|| FleetStateCode.Deleted_running.toString().equals(fleetState)
-        		|| FleetStateCode.Deleted_terminating.toString().equals(fleetState)
         		|| FleetStateCode.Modifying.toString().equals(fleetState)) {
         	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_RUNNING;
         } else if (FleetStateCode.Active.toString().equals(fleetState)) {
@@ -1689,7 +1687,9 @@ public class AWSClient {
         	} else if (FleetActivityStatus.Fulfilled.toString().equals(fleetActivityStatus)) {
         		ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
         	}
-        } else if (FleetStateCode.Deleted.toString().equals(fleetState)) {
+        } else if (FleetStateCode.Deleted.toString().equals(fleetState)
+        		|| FleetStateCode.Deleted_running.toString().equals(fleetState)
+        		|| FleetStateCode.Deleted_terminating.toString().equals(fleetState)) {
         	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
         } else if (FleetStateCode.Failed.toString().equals(fleetState)) {
         	ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR;
@@ -1780,13 +1780,8 @@ public class AWSClient {
         log.debug("[Instance - " + spotFleetRequestId + "] State: " + spotFleetState);
         log.debug("[Instance - " + spotFleetRequestId + "] Activity Status: " + spotFleetActivityStatus);
 
-        if (BatchState.Submitted.toString().equals(spotFleetState)
-                || BatchState.Cancelled_terminating.toString().equals(
-                    spotFleetState)
-                || BatchState.Cancelled_running.toString().equals(
-                    spotFleetState)) {
+        if (BatchState.Submitted.toString().equals(spotFleetState)) {
             ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_RUNNING;
-
         } else if (BatchState.Active.toString().equals(spotFleetState)) {
             //One of the main reasons causing the Error status: When the price in the request is lower than the current market price
             if (ActivityStatus.Error.toString().equals(spotFleetActivityStatus)) {
@@ -1801,7 +1796,11 @@ public class AWSClient {
                 ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
             }
 
-        } else if (BatchState.Cancelled.toString().equals(spotFleetState)) {
+        } else if (BatchState.Cancelled.toString().equals(spotFleetState)
+                || BatchState.Cancelled_terminating.toString().equals(
+                        spotFleetState)
+                    || BatchState.Cancelled_running.toString().equals(
+                        spotFleetState)) {
             ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE;
         } else if (BatchState.Failed.toString().equals(spotFleetState)) {
             ebrokerdRequestStatus = AwsConst.EBROKERD_STATE_COMPLETE_WITH_ERROR;
